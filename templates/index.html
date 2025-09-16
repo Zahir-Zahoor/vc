@@ -663,6 +663,102 @@
             data.users.forEach(user => connectedUsers.add(user));
             updateUserCount(connectedUsers.size);
         });
+
+        // WebRTC peer connections
+        const peerConnections = {};
+        const configuration = {
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        };
+
+        // Handle new user joining - create peer connection
+        socket.on('user_joined', async (data) => {
+            addMessage('System', `${data.user} joined the room`, 'system');
+            connectedUsers.add(data.user);
+            updateUserCount(connectedUsers.size);
+            
+            if (localStream && data.user !== username) {
+                await createPeerConnection(data.user);
+            }
+        });
+
+        // Create peer connection for a user
+        async function createPeerConnection(userId) {
+            const pc = new RTCPeerConnection(configuration);
+            peerConnections[userId] = pc;
+
+            // Add local stream tracks
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    pc.addTrack(track, localStream);
+                });
+            }
+
+            // Handle remote stream
+            pc.ontrack = (event) => {
+                const remoteStream = event.streams[0];
+                addVideoElement(userId, remoteStream, userId);
+            };
+
+            // Handle ICE candidates
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('ice_candidate', {
+                        target: userId,
+                        candidate: event.candidate
+                    });
+                }
+            };
+
+            // Create and send offer
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit('offer', { target: userId, offer: offer });
+        }
+
+        // Handle WebRTC signaling
+        socket.on('offer', async (data) => {
+            const pc = new RTCPeerConnection(configuration);
+            peerConnections[data.from] = pc;
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    pc.addTrack(track, localStream);
+                });
+            }
+
+            pc.ontrack = (event) => {
+                const remoteStream = event.streams[0];
+                addVideoElement(data.from, remoteStream, data.from);
+            };
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('ice_candidate', {
+                        target: data.from,
+                        candidate: event.candidate
+                    });
+                }
+            };
+
+            await pc.setRemoteDescription(data.offer);
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('answer', { target: data.from, answer: answer });
+        });
+
+        socket.on('answer', async (data) => {
+            const pc = peerConnections[data.from];
+            if (pc) {
+                await pc.setRemoteDescription(data.answer);
+            }
+        });
+
+        socket.on('ice_candidate', async (data) => {
+            const pc = peerConnections[data.from];
+            if (pc) {
+                await pc.addIceCandidate(data.candidate);
+            }
+        });
     </script>
 </body>
 </html>
