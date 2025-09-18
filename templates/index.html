@@ -1,298 +1,1030 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Video Chat</title>
+    <title>Meet - Video Calling</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: Arial, sans-serif; background: #202124; color: white; padding: 20px; }
-        .container { max-width: 1000px; margin: 0 auto; }
-        .login { text-align: center; padding: 50px; }
-        .app { display: none; }
-        .videos { display: flex; gap: 20px; flex-wrap: wrap; margin: 20px 0; }
-        .video-box { position: relative; }
-        video { width: 300px; height: 200px; background: #000; border: 2px solid #40a7e3; }
-        .name { position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.7); padding: 5px; border-radius: 3px; }
-        button { padding: 10px 20px; margin: 5px; background: #40a7e3; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        .controls { text-align: center; margin: 20px 0; }
-        input { padding: 10px; margin: 5px; width: 200px; }
-        .log { background: #333; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 12px; max-height: 150px; overflow-y: auto; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #202124;
+            color: #e8eaed;
+            overflow: hidden;
+        }
+        
+        /* Login Screen */
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #1a73e8 0%, #4285f4 100%);
+        }
+        
+        .login-card {
+            background: #fff;
+            color: #202124;
+            padding: 48px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 8px 10px 1px rgba(0,0,0,.14), 0 3px 14px 2px rgba(0,0,0,.12);
+            max-width: 400px;
+            width: 90%;
+        }
+        
+        .login-card h1 { 
+            color: #1a73e8; 
+            margin-bottom: 32px; 
+            font-size: 32px;
+            font-weight: 400;
+        }
+        
+        .login-card input {
+            width: 100%;
+            padding: 16px;
+            margin: 8px 0;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            background: #fff;
+            color: #202124;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .login-card input:focus {
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            text-transform: none;
+            letter-spacing: 0.25px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary { 
+            background: #1a73e8; 
+            color: white;
+            box-shadow: 0 1px 2px 0 rgba(60,64,67,.3);
+        }
+        .btn-primary:hover { 
+            background: #1557b0;
+            box-shadow: 0 1px 3px 0 rgba(60,64,67,.3);
+        }
+        
+        .btn-secondary { 
+            background: #f8f9fa; 
+            color: #3c4043;
+            border: 1px solid #dadce0;
+        }
+        .btn-secondary:hover { background: #f1f3f4; }
+        
+        /* Main App Layout */
+        .app-container {
+            display: none;
+            height: 100vh;
+            flex-direction: column;
+            background: #202124;
+        }
+        
+        .header {
+            background: #3c4043;
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #5f6368;
+            height: 64px;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .meeting-info h2 { 
+            color: #e8eaed; 
+            font-size: 18px;
+            font-weight: 400;
+        }
+        
+        .meeting-code {
+            color: #9aa0a6;
+            font-size: 14px;
+            font-family: 'Roboto Mono', monospace;
+        }
+        
+        .header-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .icon-btn {
+            width: 48px;
+            height: 48px;
+            border: none;
+            border-radius: 50%;
+            background: transparent;
+            color: #e8eaed;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: background 0.2s;
+            position: relative;
+        }
+        
+        .icon-btn:hover { background: rgba(232,234,237,0.08); }
+        
+        .icon-btn.active { background: #1a73e8; }
+        
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .video-area {
+            flex: 1;
+            background: #202124;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .presentation-area {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 16px;
+            padding: 16px;
+            overflow-y: auto;
+            align-content: start;
+        }
+        
+        /* Video Tiles */
+        .video-tile {
+            position: relative;
+            background: #3c4043;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 3px solid transparent;
+            min-height: 180px;
+        }
+        
+        .video-tile:hover { 
+            transform: scale(1.02);
+            border-color: #1a73e8;
+        }
+        
+        .video-tile.speaking {
+            border-color: #34a853;
+            box-shadow: 0 0 0 3px rgba(52,168,83,0.3);
+        }
+        
+        .video-tile.pinned {
+            border-color: #fbbc04;
+        }
+        
+        .participant-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .participant-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #3c4043, #5f6368);
+        }
+        
+        .participant-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #1a73e8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 500;
+            margin-bottom: 12px;
+            color: white;
+        }
+        
+        .participant-name {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            right: 12px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            backdrop-filter: blur(4px);
+        }
+        
+        .participant-controls {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .video-tile:hover .participant-controls { opacity: 1; }
+        
+        .control-icon {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        
+        .mic-status {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(234,67,53,0.9);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            backdrop-filter: blur(4px);
+        }
+        
+        /* Bottom Controls */
+        .bottom-bar {
+            background: #3c4043;
+            padding: 20px 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            border-top: 1px solid #5f6368;
+        }
+        
+        .control-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .main-control {
+            width: 56px;
+            height: 56px;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .control-mic { background: #5f6368; color: white; }
+        .control-mic.muted { background: #ea4335; }
+        
+        .control-camera { background: #5f6368; color: white; }
+        .control-camera.off { background: #ea4335; }
+        
+        .control-screen { background: #5f6368; color: white; }
+        .control-screen.sharing { background: #1a73e8; }
+        
+        .control-end { background: #ea4335; color: white; }
+        .control-end:hover { background: #d33b2c; }
+        
+        .control-more { background: #5f6368; color: white; }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 360px;
+            background: #3c4043;
+            border-left: 1px solid #5f6368;
+            display: none;
+            flex-direction: column;
+        }
+        
+        .sidebar.open { display: flex; }
+        
+        .sidebar-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #5f6368;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 500;
+        }
+        
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .chat-messages {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .chat-message {
+            background: #202124;
+            padding: 16px;
+            border-radius: 12px;
+            border-left: 4px solid #1a73e8;
+        }
+        
+        .message-sender {
+            font-size: 12px;
+            color: #9aa0a6;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .message-text {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .chat-input-area {
+            padding: 20px;
+            border-top: 1px solid #5f6368;
+        }
+        
+        .chat-input {
+            width: 100%;
+            padding: 16px;
+            border: 1px solid #5f6368;
+            border-radius: 24px;
+            background: #202124;
+            color: #e8eaed;
+            outline: none;
+            font-size: 14px;
+            resize: none;
+        }
+        
+        .chat-input:focus {
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+        }
+        
+        .participants-list {
+            padding: 20px;
+        }
+        
+        .participant-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 0;
+            border-bottom: 1px solid #5f6368;
+        }
+        
+        .participant-item:last-child {
+            border-bottom: none;
+        }
+        
+        .participant-item-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #1a73e8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 500;
+            color: white;
+        }
+        
+        .participant-item-info {
+            flex: 1;
+        }
+        
+        .participant-item-name {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        
+        .participant-item-status {
+            font-size: 12px;
+            color: #9aa0a6;
+        }
+        
+        /* Notifications */
+        .notification {
+            position: fixed;
+            top: 80px;
+            right: 24px;
+            background: #3c4043;
+            color: #e8eaed;
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s;
+            max-width: 300px;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        /* Connection Status */
+        .connection-status {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1001;
+            transition: all 0.3s;
+        }
+        
+        .connection-status.connected {
+            background: #34a853;
+            color: white;
+        }
+        
+        .connection-status.disconnected {
+            background: #ea4335;
+            color: white;
+        }
+        
+        .connection-status.connecting {
+            background: #fbbc04;
+            color: #202124;
+        }
+        
+        /* Debug Log */
+        .debug-log {
+            position: fixed;
+            bottom: 16px;
+            left: 16px;
+            width: 400px;
+            max-height: 200px;
+            background: rgba(0,0,0,0.9);
+            color: #e8eaed;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 11px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .debug-log.show {
+            display: block;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .presentation-area {
+                grid-template-columns: 1fr;
+                padding: 12px;
+            }
+            
+            .sidebar {
+                position: absolute;
+                top: 0;
+                right: -360px;
+                height: 100%;
+                transition: right 0.3s;
+                z-index: 100;
+            }
+            
+            .sidebar.open {
+                right: 0;
+            }
+            
+            .header {
+                padding: 12px 16px;
+            }
+            
+            .bottom-bar {
+                padding: 16px;
+                gap: 12px;
+            }
+            
+            .main-control {
+                width: 48px;
+                height: 48px;
+                font-size: 20px;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div id="login" class="login">
-            <h1>Video Chat</h1>
-            <input id="username" placeholder="Your name">
-            <input id="room" placeholder="Room name">
-            <button onclick="join()">Join Room</button>
-        </div>
-
-        <div id="app" class="app">
-            <h2 id="roomTitle"></h2>
-            <div class="controls">
-                <button id="videoBtn" onclick="toggleVideo()">Start Video</button>
-                <button onclick="leave()">Leave Room</button>
-            </div>
-            <div class="videos" id="videos"></div>
-            <div class="log" id="log"></div>
+    <div class="connection-status" id="connectionStatus">Connecting...</div>
+    
+    <div id="loginContainer" class="login-container">
+        <div class="login-card">
+            <h1>📹 Meet</h1>
+            <input id="username" placeholder="Your name" maxlength="50">
+            <input id="room" placeholder="Meeting code" maxlength="50">
+            <br><br>
+            <button onclick="join()" class="btn btn-primary">
+                <span>🚀</span> Join Meeting
+            </button>
+            <br><br>
+            <button onclick="createRandomRoom()" class="btn btn-secondary">
+                <span>➕</span> New Meeting
+            </button>
         </div>
     </div>
 
+    <div id="appContainer" class="app-container">
+        <div class="header">
+            <div class="header-left">
+                <div class="meeting-info">
+                    <h2 id="roomTitle"></h2>
+                    <div class="meeting-code" id="meetingCode"></div>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button class="icon-btn" onclick="copyMeetingLink()" title="Copy meeting link">🔗</button>
+                <button class="icon-btn" onclick="toggleParticipants()" title="People" id="participantsBtn">👥</button>
+                <button class="icon-btn" onclick="toggleChat()" title="Chat" id="chatBtn">💬</button>
+                <button class="icon-btn" onclick="toggleDebug()" title="Debug">🐛</button>
+                <button class="btn btn-secondary" onclick="leaveRoom()">Leave</button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="video-area">
+                <div class="presentation-area" id="presentationArea"></div>
+            </div>
+
+            <div class="sidebar" id="sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-title" id="sidebarTitle">Chat</div>
+                    <button class="icon-btn" onclick="closeSidebar()">✕</button>
+                </div>
+                <div class="sidebar-content" id="sidebarContent">
+                    <div id="chatContent" class="chat-messages"></div>
+                    <div id="participantsContent" class="participants-list" style="display: none;"></div>
+                </div>
+                <div class="chat-input-area" id="chatInputArea">
+                    <textarea id="messageInput" class="chat-input" placeholder="Send a message to everyone" rows="1"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-bar">
+            <div class="control-group">
+                <button id="micBtn" class="main-control control-mic" onclick="toggleMic()" title="Mute/Unmute">🎤</button>
+                <button id="cameraBtn" class="main-control control-camera off" onclick="toggleVideo()" title="Turn camera on/off">📹</button>
+            </div>
+            
+            <div class="control-group">
+                <button id="screenBtn" class="main-control control-screen" onclick="toggleScreenShare()" title="Present screen">🖥️</button>
+                <button class="main-control control-more" onclick="showMoreOptions()" title="More options">⋯</button>
+            </div>
+            
+            <div class="control-group">
+                <button class="main-control control-end" onclick="leaveRoom()" title="Leave meeting">📞</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification" class="notification"></div>
+    <div id="debugLog" class="debug-log"></div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script>
-        const socket = io();
-        let localStream, peerConnections = {}, isVideoOn = false;
+        // Initialize variables first
+        let socket, localStream, peerConnections = {}, isVideoOn = false, isMicOn = true, isScreenSharing = false;
         let myId, myName, myRoom;
+        let participants = new Map();
+        let debugMode = false;
+
+        // Essential functions that are called from HTML onclick
+        function join() {
+            myName = document.getElementById('username').value.trim();
+            myRoom = document.getElementById('room').value.trim();
+            
+            if (!myName || !myRoom) {
+                showNotification('Please enter your name and meeting code');
+                return;
+            }
+            
+            if (socket && socket.connected) {
+                socket.emit('join_room', { username: myName, room: myRoom });
+                log('Joining room: ' + myRoom + ' as ' + myName);
+            } else {
+                showNotification('Connecting to server...');
+            }
+        }
+
+        function createRandomRoom() {
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            document.getElementById('room').value = roomId;
+            document.getElementById('username').focus();
+            showNotification('New meeting room created: ' + roomId);
+        }
+
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            if (notification) {
+                notification.textContent = message;
+                notification.classList.add('show');
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 3000);
+            }
+        }
 
         function log(msg) {
-            const logDiv = document.getElementById('log');
-            logDiv.innerHTML += new Date().toLocaleTimeString() + ': ' + msg + '<br>';
-            logDiv.scrollTop = logDiv.scrollHeight;
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('debugLog');
+            if (logDiv) {
+                logDiv.innerHTML += timestamp + ': ' + msg + '<br>';
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
             console.log(msg);
         }
 
-        socket.on('connect', () => {
-            myId = socket.id;
-            log('Connected: ' + myId);
-        });
-
-        socket.on('room_joined', () => {
-            document.getElementById('login').style.display = 'none';
-            document.getElementById('app').style.display = 'block';
-            document.getElementById('roomTitle').textContent = 'Room: ' + myRoom;
-            log('Joined room: ' + myRoom);
-        });
-
-        socket.on('user_joined', (data) => {
-            log('User joined: ' + data.user + ' (' + data.sid + ')');
-        });
-
-        socket.on('user_video_stopped', (data) => {
-            log('User stopped video: ' + data.user + ' (' + data.sid + ')');
-            // Keep the connection but remove the video element
-            removeVideo(data.sid);
-        });
-
-        socket.on('user_video_started', async (data) => {
-            log('User started video: ' + data.user + ' (' + data.sid + ')');
-            if (data.sid !== myId) {
-                if (!peerConnections[data.sid]) {
-                    log('Creating new connection to: ' + data.sid);
-                    await createConnection(data.sid, true);
-                } else {
-                    log('Connection exists, recreating for fresh negotiation');
-                    // Close existing connection and create fresh one
-                    peerConnections[data.sid].close();
-                    delete peerConnections[data.sid];
-                    removeVideo(data.sid);
-                    
-                    // Create fresh connection
-                    await createConnection(data.sid, true);
-                }
+        function updateConnectionStatus(status) {
+            const indicator = document.getElementById('connectionStatus');
+            if (indicator) {
+                indicator.className = `connection-status ${status}`;
+                indicator.textContent = status === 'connected' ? '🟢 Connected' : 
+                                       status === 'disconnected' ? '🔴 Disconnected' : 
+                                       '🟡 Connecting...';
             }
-        });
-
-        socket.on('offer', async (data) => {
-            log('Received offer from: ' + data.from);
-            try {
-                let pc = peerConnections[data.from];
-                
-                if (!pc) {
-                    log('Creating new connection for offer');
-                    await createConnection(data.from, false);
-                    pc = peerConnections[data.from];
-                } else {
-                    log('Using existing connection for renegotiation');
-                }
-                
-                log('Setting remote description (offer)');
-                await pc.setRemoteDescription(data.offer);
-                
-                log('Creating answer');
-                const answer = await pc.createAnswer({
-                    offerToReceiveAudio: true,
-                    offerToReceiveVideo: true
-                });
-                
-                log('Setting local description (answer)');
-                await pc.setLocalDescription(answer);
-                
-                socket.emit('answer', { target: data.from, answer: answer });
-                log('Sent answer to: ' + data.from);
-            } catch (error) {
-                log('❌ Error handling offer: ' + error.message);
-            }
-        });
-
-        socket.on('answer', async (data) => {
-            log('Received answer from: ' + data.from);
-            if (peerConnections[data.from]) {
-                await peerConnections[data.from].setRemoteDescription(data.answer);
-            }
-        });
-
-        socket.on('ice_candidate', async (data) => {
-            log('Received ICE from: ' + data.from);
-            if (peerConnections[data.from]) {
-                await peerConnections[data.from].addIceCandidate(data.candidate);
-            }
-        });
-
-        socket.on('user_left', (data) => {
-            log('User left: ' + data.user);
-            removeVideo(data.sid);
-            if (peerConnections[data.sid]) {
-                peerConnections[data.sid].close();
-                delete peerConnections[data.sid];
-            }
-        });
-
-        function join() {
-            myName = document.getElementById('username').value;
-            myRoom = document.getElementById('room').value;
-            if (!myName || !myRoom) return alert('Enter name and room');
-            socket.emit('join_room', { username: myName, room: myRoom });
         }
 
+        function toggleDebug() {
+            debugMode = !debugMode;
+            const debugLog = document.getElementById('debugLog');
+            if (debugLog) {
+                debugLog.classList.toggle('show', debugMode);
+            }
+        }
+
+        function leaveRoom() {
+            if (confirm('Leave the meeting?')) {
+                location.reload();
+            }
+        }
+
+        // Initialize socket after DOM loads
+        document.addEventListener('DOMContentLoaded', function() {
+            socket = io();
+            setupSocketEvents();
+            updateConnectionStatus('connecting');
+        });
+
+        function setupSocketEvents() {
+            socket.on('connect', () => {
+                myId = socket.id;
+                log('Connected: ' + myId);
+                updateConnectionStatus('connected');
+            });
+
+            socket.on('disconnect', () => {
+                log('Disconnected from server');
+                updateConnectionStatus('disconnected');
+            });
+
+            socket.on('room_joined', () => {
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('appContainer').style.display = 'flex';
+                document.getElementById('roomTitle').textContent = myRoom;
+                document.getElementById('meetingCode').textContent = 'Meeting ID: ' + myRoom;
+                
+                addParticipant('me', null, myName + ' (You)', true);
+                log('Joined room: ' + myRoom);
+                showNotification('Joined meeting successfully');
+            });
+
+            socket.on('user_joined', (data) => {
+                log('User joined: ' + data.user + ' (' + data.sid + ')');
+                addParticipant(data.sid, null, data.user);
+                addChatMessage('System', `${data.user} joined the meeting`, true);
+                updateParticipantCount();
+            });
+
+            socket.on('user_left', (data) => {
+                log('User left: ' + data.user);
+                removeParticipant(data.sid);
+                addChatMessage('System', `${data.user} left the meeting`, true);
+                updateParticipantCount();
+            });
+
+            socket.on('user_video_started', async (data) => {
+                log('User started video: ' + data.user + ' (' + data.sid + ')');
+                if (data.sid !== myId) {
+                    if (!peerConnections[data.sid]) {
+                        log('Creating new connection to: ' + data.sid);
+                        await createConnection(data.sid, true);
+                    } else {
+                        log('Connection exists, recreating for fresh negotiation');
+                        peerConnections[data.sid].close();
+                        delete peerConnections[data.sid];
+                        removeVideo(data.sid);
+                        await createConnection(data.sid, true);
+                    }
+                }
+            });
+
+            socket.on('user_video_stopped', (data) => {
+                log('User stopped video: ' + data.user + ' (' + data.sid + ')');
+                removeVideo(data.sid);
+            });
+
+            socket.on('offer', async (data) => {
+                log('Received offer from: ' + data.from);
+                try {
+                    let pc = peerConnections[data.from];
+                    if (!pc) {
+                        log('Creating new connection for offer');
+                        await createConnection(data.from, false);
+                        pc = peerConnections[data.from];
+                    } else {
+                        log('Using existing connection for renegotiation');
+                    }
+                    
+                    await pc.setRemoteDescription(data.offer);
+                    const answer = await pc.createAnswer({
+                        offerToReceiveAudio: true,
+                        offerToReceiveVideo: true
+                    });
+                    await pc.setLocalDescription(answer);
+                    socket.emit('answer', { target: data.from, answer: answer });
+                    log('Sent answer to: ' + data.from);
+                } catch (error) {
+                    log('❌ Error handling offer: ' + error.message);
+                }
+            });
+
+            socket.on('answer', async (data) => {
+                log('Received answer from: ' + data.from);
+                if (peerConnections[data.from]) {
+                    await peerConnections[data.from].setRemoteDescription(data.answer);
+                }
+            });
+
+            socket.on('ice_candidate', async (data) => {
+                if (peerConnections[data.from]) {
+                    await peerConnections[data.from].addIceCandidate(data.candidate);
+                }
+            });
+
+            socket.on('receive_message', (data) => {
+                addChatMessage(data.username, data.message);
+            });
+        }
+
+        // Functions called from HTML onclick events
         async function toggleVideo() {
-            const btn = document.getElementById('videoBtn');
+            const btn = document.getElementById('cameraBtn');
             if (!isVideoOn) {
                 try {
-                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: isMicOn });
                     addVideo('me', localStream, myName + ' (You)');
-                    btn.textContent = 'Stop Video';
+                    btn.classList.remove('off');
                     isVideoOn = true;
                     
-                    // Replace tracks in existing peer connections
+                    // Replace tracks in existing connections
                     Object.entries(peerConnections).forEach(([userId, pc]) => {
                         localStream.getTracks().forEach(track => {
-                            // Find existing sender for this track type
                             const sender = pc.getSenders().find(s => s.track && s.track.kind === track.kind);
                             if (sender) {
-                                log('Replacing ' + track.kind + ' track for: ' + userId);
                                 sender.replaceTrack(track);
                             } else {
-                                log('Adding new ' + track.kind + ' track for: ' + userId);
                                 pc.addTrack(track, localStream);
                             }
                         });
                     });
                     
-                    socket.emit('video_started');
-                    log('Started video and updated all peer connections');
+                    if (socket) socket.emit('video_started');
+                    log('Started video');
+                    showNotification('Camera turned on');
                 } catch (err) {
                     log('Camera error: ' + err.message);
-                    alert('Camera error: ' + err.message);
+                    showNotification('Could not access camera: ' + err.message);
                 }
             } else {
-                // Stop all tracks
                 if (localStream) {
-                    localStream.getTracks().forEach(track => {
-                        track.stop();
-                        log('Stopped ' + track.kind + ' track');
-                    });
+                    localStream.getTracks().forEach(track => track.stop());
                 }
-                
-                // Remove video element
                 removeVideo('me');
-                btn.textContent = 'Start Video';
+                btn.classList.add('off');
                 isVideoOn = false;
                 localStream = null;
-                
-                socket.emit('video_stopped');
+                if (socket) socket.emit('video_stopped');
                 log('Stopped video');
+                showNotification('Camera turned off');
             }
         }
 
-        async function createConnection(userId, createOffer) {
-            log('Creating peer connection with: ' + userId);
-            const pc = new RTCPeerConnection({ 
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ] 
-            });
-            peerConnections[userId] = pc;
-
-            // Add local tracks if available
+        async function toggleMic() {
+            const btn = document.getElementById('micBtn');
+            
             if (localStream) {
-                localStream.getTracks().forEach(track => {
-                    const sender = pc.addTrack(track, localStream);
-                    log('Added local track to connection: ' + track.kind);
-                });
+                const audioTracks = localStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    audioTracks[0].enabled = !audioTracks[0].enabled;
+                    isMicOn = audioTracks[0].enabled;
+                }
+            } else {
+                isMicOn = !isMicOn;
             }
+            
+            btn.classList.toggle('muted', !isMicOn);
+            showNotification(isMicOn ? 'Microphone unmuted' : 'Microphone muted');
+            updateMicStatus();
+        }
 
-            // Handle incoming remote stream
-            pc.ontrack = (event) => {
-                log('🎉 RECEIVED REMOTE STREAM from: ' + userId);
-                const remoteStream = event.streams[0];
-                if (remoteStream) {
-                    log('Remote stream has ' + remoteStream.getTracks().length + ' tracks');
-                    addVideo(userId, remoteStream, 'Remote User');
-                } else {
-                    log('❌ Remote stream is null');
-                }
-            };
-
-            // Handle ICE candidates
-            pc.onicecandidate = (event) => {
-                if (event.candidate) {
-                    log('Sending ICE candidate to: ' + userId);
-                    socket.emit('ice_candidate', { target: userId, candidate: event.candidate });
-                } else {
-                    log('ICE gathering complete for: ' + userId);
-                }
-            };
-
-            // Monitor connection state changes
-            pc.onconnectionstatechange = () => {
-                log('Connection state with ' + userId + ': ' + pc.connectionState);
-                if (pc.connectionState === 'connected') {
-                    log('✅ Successfully connected to: ' + userId);
-                } else if (pc.connectionState === 'failed') {
-                    log('❌ Connection failed with: ' + userId);
-                }
-            };
-
-            // Monitor ICE connection state
-            pc.oniceconnectionstatechange = () => {
-                log('ICE connection state with ' + userId + ': ' + pc.iceConnectionState);
-            };
-
-            if (createOffer) {
+        async function toggleScreenShare() {
+            const btn = document.getElementById('screenBtn');
+            
+            if (!isScreenSharing) {
                 try {
-                    const offer = await pc.createOffer({
-                        offerToReceiveAudio: true,
-                        offerToReceiveVideo: true
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                    
+                    // Replace video track in existing connections
+                    const videoTrack = screenStream.getVideoTracks()[0];
+                    Object.values(peerConnections).forEach(pc => {
+                        const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                        if (sender) {
+                            sender.replaceTrack(videoTrack);
+                        }
                     });
-                    await pc.setLocalDescription(offer);
-                    socket.emit('offer', { target: userId, offer: offer });
-                    log('Sent offer to: ' + userId);
-                } catch (error) {
-                    log('❌ Error creating offer: ' + error.message);
+                    
+                    btn.classList.add('sharing');
+                    isScreenSharing = true;
+                    showNotification('Screen sharing started');
+                    
+                    videoTrack.onended = () => {
+                        stopScreenShare();
+                    };
+                } catch (err) {
+                    showNotification('Could not share screen: ' + err.message);
                 }
+            } else {
+                stopScreenShare();
             }
         }
 
+        function toggleChat() {
+            const sidebar = document.getElementById('sidebar');
+            const chatContent = document.getElementById('chatContent');
+            const participantsContent = document.getElementById('participantsContent');
+            const chatInputArea = document.getElementById('chatInputArea');
+            const sidebarTitle = document.getElementById('sidebarTitle');
+            const chatBtn = document.getElementById('chatBtn');
+            
+            if (sidebar.classList.contains('open') && chatContent.style.display !== 'none') {
+                sidebar.classList.remove('open');
+                chatBtn.classList.remove('active');
+            } else {
+                sidebar.classList.add('open');
+                chatContent.style.display = 'flex';
+                participantsContent.style.display = 'none';
+                chatInputArea.style.display = 'block';
+                sidebarTitle.textContent = 'Chat';
+                chatBtn.classList.add('active');
+                document.getElementById('participantsBtn').classList.remove('active');
+            }
+        }
+
+        function toggleParticipants() {
+            const sidebar = document.getElementById('sidebar');
+            const chatContent = document.getElementById('chatContent');
+            const participantsContent = document.getElementById('participantsContent');
+            const chatInputArea = document.getElementById('chatInputArea');
+            const sidebarTitle = document.getElementById('sidebarTitle');
+            const participantsBtn = document.getElementById('participantsBtn');
+            
+            if (sidebar.classList.contains('open') && participantsContent.style.display !== 'none') {
+                sidebar.classList.remove('open');
+                participantsBtn.classList.remove('active');
+            } else {
+                sidebar.classList.add('open');
+                chatContent.style.display = 'none';
+                participantsContent.style.display = 'block';
+                chatInputArea.style.display = 'none';
+                sidebarTitle.textContent = 'Participants (' + participants.size + ')';
+                participantsBtn.classList.add('active');
+                document.getElementById('chatBtn').classList.remove('active');
+            }
+        }
+
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('chatBtn').classList.remove('active');
+            document.getElementById('participantsBtn').classList.remove('active');
+        }
+
+        function copyMeetingLink() {
+            const link = window.location.origin + '?room=' + myRoom;
+            navigator.clipboard.writeText(link).then(() => {
+                showNotification('Meeting link copied to clipboard');
+            });
+        }
+
+        function showMoreOptions() {
+            showNotification('More options coming soon...');
+        }
+
+        // Helper functions
         function addVideo(id, stream, name) {
             removeVideo(id);
-            const videoBox = document.createElement('div');
-            videoBox.className = 'video-box';
-            videoBox.id = 'video-' + id;
+            const container = document.createElement('div');
+            container.className = 'video-tile';
+            container.id = 'video-' + id;
             
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            video.autoplay = true;
-            video.playsInline = true;
-            video.muted = id === 'me';
+            if (stream) {
+                const video = document.createElement('video');
+                video.className = 'participant-video';
+                video.srcObject = stream;
+                video.autoplay = true;
+                video.playsInline = true;
+                video.muted = id === 'me';
+                container.appendChild(video);
+            } else {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'participant-placeholder';
+                placeholder.innerHTML = `
+                    <div class="participant-avatar">${name.charAt(0).toUpperCase()}</div>
+                    <div style="font-size: 14px; color: #9aa0a6; margin-top: 8px;">Camera off</div>
+                `;
+                container.appendChild(placeholder);
+            }
             
             const nameLabel = document.createElement('div');
-            nameLabel.className = 'name';
+            nameLabel.className = 'participant-name';
             nameLabel.textContent = name;
+            container.appendChild(nameLabel);
             
-            videoBox.appendChild(video);
-            videoBox.appendChild(nameLabel);
-            document.getElementById('videos').appendChild(videoBox);
+            if (!isMicOn && id === 'me') {
+                const micStatus = document.createElement('div');
+                micStatus.className = 'mic-status';
+                micStatus.innerHTML = '🔇';
+                container.appendChild(micStatus);
+            }
             
+            const presentationArea = document.getElementById('presentationArea');
+            if (presentationArea) {
+                presentationArea.appendChild(container);
+            }
             log('Added video for: ' + name);
         }
 
@@ -304,9 +1036,345 @@
             }
         }
 
-        function leave() {
-            location.reload();
+        function addParticipant(id, stream, name, isLocal = false) {
+            participants.set(id, { name, stream, isLocal });
+            if (stream) {
+                addVideo(id, stream, name);
+            } else {
+                addVideo(id, null, name);
+            }
+            updateParticipantsList();
+            updateParticipantCount();
         }
+
+        function removeParticipant(id) {
+            removeVideo(id);
+            participants.delete(id);
+            
+            if (peerConnections[id]) {
+                peerConnections[id].close();
+                delete peerConnections[id];
+            }
+            
+            updateParticipantsList();
+            updateParticipantCount();
+        }
+
+        function updateMicStatus() {
+            const container = document.getElementById('video-me');
+            if (container) {
+                const existingStatus = container.querySelector('.mic-status');
+                if (!isMicOn && !existingStatus) {
+                    const micStatus = document.createElement('div');
+                    micStatus.className = 'mic-status';
+                    micStatus.innerHTML = '🔇';
+                    container.appendChild(micStatus);
+                } else if (isMicOn && existingStatus) {
+                    existingStatus.remove();
+                }
+            }
+        }
+
+        function updateParticipantCount() {
+            const count = participants.size;
+            const meetingCode = document.getElementById('meetingCode');
+            if (meetingCode && myRoom) {
+                meetingCode.textContent = `Meeting ID: ${myRoom} • ${count} participant${count !== 1 ? 's' : ''}`;
+            }
+        }
+
+        function updateParticipantsList() {
+            const container = document.getElementById('participantsContent');
+            if (container) {
+                container.innerHTML = '';
+                
+                participants.forEach((participant, id) => {
+                    const item = document.createElement('div');
+                    item.className = 'participant-item';
+                    item.innerHTML = `
+                        <div class="participant-item-avatar">${participant.name.charAt(0).toUpperCase()}</div>
+                        <div class="participant-item-info">
+                            <div class="participant-item-name">${participant.name}</div>
+                            <div class="participant-item-status">${participant.stream ? 'Camera on' : 'Camera off'}</div>
+                        </div>
+                    `;
+                    container.appendChild(item);
+                });
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (message && socket) {
+                socket.emit('send_message', { message });
+                input.value = '';
+                input.style.height = 'auto';
+            }
+        }
+
+        function addChatMessage(sender, message, isSystem = false) {
+            const container = document.getElementById('chatContent');
+            if (container) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'chat-message';
+                
+                if (isSystem) {
+                    messageDiv.style.background = '#5f6368';
+                    messageDiv.style.borderLeft = '4px solid #9aa0a6';
+                    messageDiv.innerHTML = `<div class="message-text">${message}</div>`;
+                } else {
+                    messageDiv.innerHTML = `
+                        <div class="message-sender">${sender}</div>
+                        <div class="message-text">${message}</div>
+                    `;
+                }
+                
+                container.appendChild(messageDiv);
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function stopScreenShare() {
+            const btn = document.getElementById('screenBtn');
+            
+            if (localStream && isVideoOn) {
+                const videoTrack = localStream.getVideoTracks()[0];
+                Object.values(peerConnections).forEach(pc => {
+                    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (sender && videoTrack) {
+                        sender.replaceTrack(videoTrack);
+                    }
+                });
+            }
+            
+            btn.classList.remove('sharing');
+            isScreenSharing = false;
+            showNotification('Screen sharing stopped');
+        }
+
+        // WebRTC Connection Management
+        async function createConnection(userId, createOffer) {
+            log('Creating peer connection with: ' + userId);
+            const pc = new RTCPeerConnection({ 
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ] 
+            });
+            peerConnections[userId] = pc;
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    pc.addTrack(track, localStream);
+                });
+            }
+
+            pc.ontrack = (event) => {
+                log('🎉 RECEIVED REMOTE STREAM from: ' + userId);
+                const remoteStream = event.streams[0];
+                if (remoteStream) {
+                    addVideo(userId, remoteStream, 'Remote User');
+                }
+            };
+
+            pc.onicecandidate = (event) => {
+                if (event.candidate && socket) {
+                    socket.emit('ice_candidate', { target: userId, candidate: event.candidate });
+                }
+            };
+
+            pc.onconnectionstatechange = () => {
+                log('Connection state with ' + userId + ': ' + pc.connectionState);
+                if (pc.connectionState === 'connected') {
+                    showNotification('Connected to participant');
+                }
+            };
+
+            if (createOffer) {
+                try {
+                    const offer = await pc.createOffer({
+                        offerToReceiveAudio: true,
+                        offerToReceiveVideo: true
+                    });
+                    await pc.setLocalDescription(offer);
+                    if (socket) {
+                        socket.emit('offer', { target: userId, offer: offer });
+                    }
+                    log('Sent offer to: ' + userId);
+                } catch (error) {
+                    log('❌ Error creating offer: ' + error.message);
+                }
+            }
+        }
+
+        function setupSocketEvents() {
+            socket.on('connect', () => {
+                myId = socket.id;
+                log('Connected: ' + myId);
+                updateConnectionStatus('connected');
+            });
+
+            socket.on('disconnect', () => {
+                log('Disconnected from server');
+                updateConnectionStatus('disconnected');
+            });
+
+            socket.on('room_joined', () => {
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('appContainer').style.display = 'flex';
+                document.getElementById('roomTitle').textContent = myRoom;
+                document.getElementById('meetingCode').textContent = 'Meeting ID: ' + myRoom;
+                
+                addParticipant('me', null, myName + ' (You)', true);
+                log('Joined room: ' + myRoom);
+                showNotification('Joined meeting successfully');
+            });
+
+            socket.on('user_joined', (data) => {
+                log('User joined: ' + data.user + ' (' + data.sid + ')');
+                addParticipant(data.sid, null, data.user);
+                addChatMessage('System', `${data.user} joined the meeting`, true);
+                updateParticipantCount();
+            });
+
+            socket.on('user_left', (data) => {
+                log('User left: ' + data.user);
+                removeParticipant(data.sid);
+                addChatMessage('System', `${data.user} left the meeting`, true);
+                updateParticipantCount();
+            });
+
+            socket.on('user_video_started', async (data) => {
+                log('User started video: ' + data.user + ' (' + data.sid + ')');
+                if (data.sid !== myId) {
+                    if (!peerConnections[data.sid]) {
+                        log('Creating new connection to: ' + data.sid);
+                        await createConnection(data.sid, true);
+                    } else {
+                        log('Connection exists, recreating for fresh negotiation');
+                        peerConnections[data.sid].close();
+                        delete peerConnections[data.sid];
+                        removeVideo(data.sid);
+                        await createConnection(data.sid, true);
+                    }
+                }
+            });
+
+            socket.on('user_video_stopped', (data) => {
+                log('User stopped video: ' + data.user + ' (' + data.sid + ')');
+                removeVideo(data.sid);
+            });
+
+            socket.on('offer', async (data) => {
+                log('Received offer from: ' + data.from);
+                try {
+                    let pc = peerConnections[data.from];
+                    if (!pc) {
+                        log('Creating new connection for offer');
+                        await createConnection(data.from, false);
+                        pc = peerConnections[data.from];
+                    } else {
+                        log('Using existing connection for renegotiation');
+                    }
+                    
+                    await pc.setRemoteDescription(data.offer);
+                    const answer = await pc.createAnswer({
+                        offerToReceiveAudio: true,
+                        offerToReceiveVideo: true
+                    });
+                    await pc.setLocalDescription(answer);
+                    socket.emit('answer', { target: data.from, answer: answer });
+                    log('Sent answer to: ' + data.from);
+                } catch (error) {
+                    log('❌ Error handling offer: ' + error.message);
+                }
+            });
+
+            socket.on('answer', async (data) => {
+                log('Received answer from: ' + data.from);
+                if (peerConnections[data.from]) {
+                    await peerConnections[data.from].setRemoteDescription(data.answer);
+                }
+            });
+
+            socket.on('ice_candidate', async (data) => {
+                if (peerConnections[data.from]) {
+                    await peerConnections[data.from].addIceCandidate(data.candidate);
+                }
+            });
+
+            socket.on('receive_message', (data) => {
+                addChatMessage(data.username, data.message);
+            });
+        }
+
+        function log(msg) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logDiv = document.getElementById('debugLog');
+            logDiv.innerHTML += timestamp + ': ' + msg + '<br>';
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(msg);
+        }
+
+        function updateConnectionStatus(status) {
+            const indicator = document.getElementById('connectionStatus');
+            indicator.className = `connection-status ${status}`;
+            indicator.textContent = status === 'connected' ? '🟢 Connected' : 
+                                   status === 'disconnected' ? '🔴 Disconnected' : 
+                                   '🟡 Connecting...';
+        }
+
+        function createRandomRoom() {
+            const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            document.getElementById('room').value = roomId;
+            document.getElementById('username').focus();
+            showNotification('New meeting room created: ' + roomId);
+        }
+
+        function toggleDebug() {
+            debugMode = !debugMode;
+            const debugLog = document.getElementById('debugLog');
+            debugLog.classList.toggle('show', debugMode);
+        }
+
+        // Event Listeners
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomParam = urlParams.get('room');
+            if (roomParam) {
+                document.getElementById('room').value = roomParam;
+                document.getElementById('username').focus();
+            }
+            
+            // Enter key support
+            document.getElementById('username').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    document.getElementById('room').focus();
+                }
+            });
+            
+            document.getElementById('room').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    join();
+                }
+            });
+
+            // Auto-resize textarea
+            const messageInput = document.getElementById('messageInput');
+            messageInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            });
+
+            messageInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        });
+    </script>
     </script>
 </body>
 </html>
