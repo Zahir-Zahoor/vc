@@ -1,7 +1,6 @@
-import multiprocessing
 import os
 
-# Server socket
+# Bind to PORT (Heroku/Cloud Run compatibility) or default 5000
 bind = f"0.0.0.0:{os.environ.get('PORT', 5000)}"
 backlog = 2048
 

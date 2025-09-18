@@ -1,241 +1,161 @@
 # Video Chat Application
 
-A real-time video calling and chat application built with Flask, WebRTC, and Socket.IO.
+A real-time video calling application built with Flask-SocketIO and WebRTC, featuring Google Meet-inspired UI and peer-to-peer video streaming.
 
-## 🚀 Features
+## Features
 
-- **Real-time Video Calling** - WebRTC peer-to-peer connections
-- **Multi-user Support** - Multiple users per room
-- **Text Chat** - Real-time messaging alongside video
-- **Room-based** - Join specific rooms with room names
-- **Responsive Design** - Works on desktop and mobile
-- **HTTPS Support** - Camera access with SSL certificates
+- **Real-time Video Calls**: WebRTC-based P2P video streaming
+- **Group Meetings**: Support for up to 50 participants per room
+- **Screen Sharing**: Share your screen with other participants
+- **Live Chat**: Real-time messaging with typing indicators
+- **Modern UI**: Google Meet-inspired responsive design
+- **Cross-platform**: Works on desktop and mobile browsers
 
-## 📋 Requirements
+## Tech Stack
 
-- Python 3.7+
-- Modern web browser with WebRTC support
-- Camera and microphone permissions
-- HTTPS for remote access (HTTP works on localhost)
+**Backend:**
+- Flask + Flask-SocketIO for real-time communication
+- Redis for session management (with in-memory fallback)
+- WebRTC signaling server
+- Rate limiting and security features
 
-## 🛠 Installation
+**Frontend:**
+- Vanilla JavaScript with WebRTC APIs
+- Socket.IO client for real-time events
+- Responsive CSS Grid layout
+- Modern browser media APIs
+
+## Quick Start
+
+### Using Docker (Recommended)
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd videoapp
+
+# Start with Docker Compose
+docker-compose up -d
+
+# Access the application
+open http://localhost:5000
+```
 
 ### Local Development
+
 ```bash
-# Clone repository
-git clone https://github.com/Zahir-Zahoor/vc.git
-cd vc
-
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
 # Install dependencies
 pip install -r requirements.txt
 
-# Run locally
+# Set environment variables
+export SECRET_KEY=your_secret_key
+export DEBUG=true
+
+# Run the application
 python app.py
 ```
 
-### Production (EC2/Server)
+## Environment Variables
+
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# For HTTPS (required for camera access)
-# Generate SSL certificate
-openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 30 -nodes -subj "/CN=YOUR_SERVER_IP"
-
-# Setup nginx proxy (recommended)
-sudo yum install -y nginx
-# Configure nginx with SSL termination
-
-# Run server
-python run.py
+SECRET_KEY=your_production_secret_key
+DEBUG=false
+PORT=5000
+REDIS_HOST=localhost
+REDIS_PORT=6379
 ```
 
-## 🌐 Usage
+## Usage
 
-### Local Testing
-1. Start server: `python app.py`
-2. Open: `http://localhost:5000`
-3. Enter username and room name
-4. Click "Join Room"
-5. Click "Start Video" to begin video call
+1. **Join a Meeting**: Enter your name and room ID
+2. **Start Video**: Click camera button to enable video
+3. **Share Screen**: Use screen share button to present
+4. **Chat**: Toggle chat sidebar for messaging
+5. **Invite Others**: Copy meeting link to share
 
-### Multi-user Testing
-1. **User 1**: Join room "meeting123" as "Alice"
-2. **User 2**: Join same room "meeting123" as "Bob"  
-3. **Both**: Click "Start Video"
-4. **Result**: Video call established with separate video panels
+## API Endpoints
 
-### Remote Access (HTTPS Required)
-1. Deploy to server with public IP
-2. Setup HTTPS (nginx + SSL certificate)
-3. Access: `https://YOUR_SERVER_IP:5000`
-4. Accept SSL certificate warning
-5. Allow camera/microphone permissions
+- `GET /` - Main application interface
+- `GET /health` - Health check endpoint
+- `GET /api/room/<room_id>/info` - Room information
+- `WebSocket /socket.io/` - Real-time communication
 
-## 🏗 Architecture
+## WebRTC Events
 
-### Backend (Flask + Socket.IO)
-- **Flask**: Web server and API
-- **Socket.IO**: Real-time communication
-- **WebRTC Signaling**: Offer/Answer/ICE candidate exchange
+**Client to Server:**
+- `join_room` - Join a meeting room
+- `send_message` - Send chat message
+- `offer/answer/ice_candidate` - WebRTC signaling
+- `video_started/stopped` - Video state changes
 
-### Frontend (HTML + JavaScript)
-- **WebRTC**: Peer-to-peer video connections
-- **Socket.IO Client**: Real-time messaging
-- **Responsive UI**: CSS Grid layout for video panels
+**Server to Client:**
+- `room_joined` - Successful room join
+- `user_joined/left` - Participant updates
+- `receive_message` - Chat messages
+- `offer/answer/ice_candidate` - WebRTC signaling
 
-### Key Components
-```
-app.py              # Flask server with Socket.IO handlers
-templates/index.html # Frontend UI and WebRTC logic
-run.py              # Production server launcher
-requirements.txt    # Python dependencies
-```
+## Browser Support
 
-## 🔧 Configuration
+- Chrome 80+
+- Firefox 75+
+- Safari 13+
+- Edge 80+
 
-### Environment Variables
+*Requires HTTPS for camera/microphone access in production*
+
+## Deployment
+
+### Production Setup
+
 ```bash
-FLASK_ENV=development  # or production
-PORT=5000             # Server port
+# Build Docker image
+docker build -t videoapp .
+
+# Run with production settings
+docker run -d \
+  -p 5000:5000 \
+  -e SECRET_KEY=production_key \
+  -e REDIS_HOST=redis_server \
+  videoapp
 ```
 
-### WebRTC Configuration
-```javascript
-const configuration = {
-    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-};
-```
+### HTTPS Configuration
 
-## 🐛 Troubleshooting
+For production deployment, ensure HTTPS is enabled as WebRTC requires secure contexts for camera/microphone access.
 
-### Common Issues
+## Security Features
 
-**"Could not access camera/microphone"**
-- **Cause**: HTTP on remote server
-- **Fix**: Use HTTPS or test on localhost
+- Rate limiting (200 requests/day, 50/hour)
+- Input validation and sanitization
+- Session management with Redis
+- Room capacity limits (50 users max)
+- CORS protection
 
-**"Join Room not working"**
-- **Cause**: JavaScript errors or network issues
-- **Fix**: Check browser console (F12) for errors
+## Troubleshooting
 
-**"Video not showing for other users"**
-- **Cause**: WebRTC connection failed
-- **Fix**: Check browser console for WebRTC errors, verify STUN server
+**Camera/Microphone Issues:**
+- Ensure HTTPS in production
+- Check browser permissions
+- Verify device availability
 
-**"SSL Certificate Error"**
-- **Cause**: Self-signed certificate
-- **Fix**: Accept certificate warning in browser
+**Connection Problems:**
+- Check firewall settings
+- Verify STUN/TURN server access
+- Monitor browser console for errors
 
-### Debug Steps
-1. **Open browser console** (F12)
-2. **Check for errors** in console
-3. **Verify network connectivity**
-4. **Test with localhost first**
-
-### Server Logs
-```bash
-# Check application logs
-tail -f /var/log/nginx/error.log
-
-# Check if server is running
-netstat -tlnp | grep :5000
-```
-
-## 📱 Mobile Support
-
-### Android APK
-- Flutter app available: `videochat-app.apk`
-- Update server URL in `lib/services/socket_service.dart`
-- Rebuild: `flutter build apk --release`
-
-### Web Mobile
-- Responsive design works on mobile browsers
-- Requires HTTPS for camera access
-- Touch-friendly interface
-
-## 🚀 Deployment
-
-### AWS EC2 Example
-```bash
-# Security Group: Allow ports 80, 443, 5000
-# Install nginx for HTTPS termination
-# Generate SSL certificate
-# Configure nginx proxy to Flask app
-```
-
-### Docker (Optional)
-```bash
-# Build image
-docker build -t videochat .
-
-# Run container
-docker run -p 5000:5000 videochat
-```
-
-## 🔒 Security
-
-### HTTPS Setup
-```bash
-# Self-signed certificate (development)
-openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 30 -nodes
-
-# Let's Encrypt (production)
-sudo certbot --nginx -d yourdomain.com
-```
-
-### Best Practices
-- Use HTTPS in production
-- Validate user inputs
-- Rate limit connections
+**Performance Issues:**
+- Limit participants per room
+- Check network bandwidth
 - Monitor server resources
 
-## 📊 Performance
+## Contributing
 
-### Optimization Tips
-- Use nginx for static files
-- Enable gzip compression
-- Use CDN for assets
-- Monitor WebRTC connection quality
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
-### Scaling
-- Use Redis for session storage
-- Load balance multiple Flask instances
-- Use TURN servers for NAT traversal
+## License
 
-## 🤝 Contributing
-
-1. Fork repository
-2. Create feature branch
-3. Test changes locally
-4. Submit pull request
-
-## 📄 License
-
-MIT License - see LICENSE file
-
-## 🆘 Support
-
-### Quick Test
-```bash
-# Local test
-python app.py
-# Open: http://localhost:5000
-
-# Remote test  
-# Open: https://YOUR_SERVER_IP:5000
-```
-
-### Contact
-- GitHub Issues: Report bugs and feature requests
-- Documentation: Check DEVELOPMENT.md for detailed setup
-
----
-
-**Last Updated**: January 2025  
-**Version**: 1.0.0  
-**Status**: Production Ready ✅
+MIT License - see LICENSE file for details
