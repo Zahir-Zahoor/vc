@@ -24,19 +24,35 @@ limiter = Limiter(
 )
 limiter.init_app(app)
 
-# Redis connection (fallback to in-memory if Redis unavailable)
-try:
-    redis_client = redis.Redis(
-        host=os.environ.get('REDIS_HOST', 'localhost'),
-        port=int(os.environ.get('REDIS_PORT', 6379)),
-        decode_responses=True
-    )
-    redis_client.ping()
-    USE_REDIS = True
-    logger.info("Connected to Redis")
-except:
-    USE_REDIS = False
-    logger.warning("Redis unavailable, using in-memory storage")
+# Redis connection with retry logic
+def connect_redis():
+    import time
+    max_retries = 3
+    retry_delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            redis_client = redis.Redis(
+                host=os.environ.get('REDIS_HOST', 'localhost'),
+                port=int(os.environ.get('REDIS_PORT', 6379)),
+                decode_responses=True,
+                socket_connect_timeout=3,
+                socket_timeout=3,
+                retry_on_timeout=True,
+                health_check_interval=30
+            )
+            redis_client.ping()
+            logger.info(f"Connected to Redis at {redis_client.connection_pool.connection_kwargs['host']}:{redis_client.connection_pool.connection_kwargs['port']}")
+            return redis_client, True
+        except Exception as e:
+            logger.warning(f"Redis connection attempt {attempt + 1}/{max_retries} failed: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+            
+    logger.error("Failed to connect to Redis, using in-memory storage")
+    return None, False
+
+redis_client, USE_REDIS = connect_redis()
 
 socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 
@@ -128,11 +144,30 @@ def test():
 
 @app.route('/health')
 def health_check():
+    redis_status = 'disconnected'
+    redis_info = None
+    
+    if USE_REDIS and redis_client:
+        try:
+            redis_client.ping()
+            redis_status = 'connected'
+            redis_info = {
+                'host': os.environ.get('REDIS_HOST', 'localhost'),
+                'port': int(os.environ.get('REDIS_PORT', 6379)),
+                'memory_usage': redis_client.info('memory').get('used_memory_human', 'unknown')
+            }
+        except:
+            redis_status = 'error'
+    
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'redis': USE_REDIS,
-        'connections': len(active_connections) if not USE_REDIS else redis_client.scard("active_connections")
+        'redis': {
+            'enabled': USE_REDIS,
+            'status': redis_status,
+            'info': redis_info
+        },
+        'connections': len(active_connections) if not USE_REDIS else (redis_client.scard("active_connections") if redis_client else 0)
     })
 
 @app.route('/api/room/<room_id>/info')

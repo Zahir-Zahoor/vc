@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   videochat:
     build: .
     ports:
@@ -9,6 +22,11 @@ services:
       - SECRET_KEY=${SECRET_KEY:-your_secret_key_here}
       - DEBUG=False
       - PORT=5000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
@@ -16,3 +34,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+volumes:
+  redis_data:
