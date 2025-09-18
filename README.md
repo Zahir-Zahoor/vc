@@ -34,11 +34,20 @@ A real-time video calling application built with Flask-SocketIO and WebRTC, feat
 git clone <repository-url>
 cd videoapp
 
-# Start with Docker Compose
-docker-compose up -d
+# Start with Docker Compose (includes Redis)
+docker-compose up --build -d
+
+# Check service status
+docker-compose ps
+
+# View logs
+docker-compose logs -f
 
 # Access the application
 open http://localhost:5000
+
+# Check health status
+curl http://localhost:5000/health
 ```
 
 ### Local Development
@@ -47,9 +56,14 @@ open http://localhost:5000
 # Install dependencies
 pip install -r requirements.txt
 
+# Start Redis (required for production features)
+redis-server
+
 # Set environment variables
 export SECRET_KEY=your_secret_key
 export DEBUG=true
+export REDIS_HOST=localhost
+export REDIS_PORT=6379
 
 # Run the application
 python app.py
@@ -61,7 +75,7 @@ python app.py
 SECRET_KEY=your_production_secret_key
 DEBUG=false
 PORT=5000
-REDIS_HOST=localhost
+REDIS_HOST=redis          # Use 'redis' for Docker, 'localhost' for local
 REDIS_PORT=6379
 ```
 
@@ -103,6 +117,36 @@ REDIS_PORT=6379
 
 *Requires HTTPS for camera/microphone access in production*
 
+## Docker Services
+
+The application runs with two services:
+
+- **Redis**: Session storage and real-time data
+- **VideoChat**: Main Flask-SocketIO application
+
+### Service Management
+
+```bash
+# Start services
+docker-compose up -d
+
+# Stop services
+docker-compose down
+
+# Rebuild after code changes
+docker-compose up --build -d
+
+# View service status
+docker-compose ps
+
+# Monitor logs
+docker-compose logs -f videochat
+docker-compose logs -f redis
+
+# Check health
+curl http://localhost:5000/health
+```
+
 ## Deployment
 
 ### Production Setup
@@ -143,10 +187,17 @@ For production deployment, ensure HTTPS is enabled as WebRTC requires secure con
 - Verify STUN/TURN server access
 - Monitor browser console for errors
 
+**Redis Connection Issues:**
+- Verify Redis service is running: `docker-compose ps`
+- Check Redis logs: `docker-compose logs redis`
+- Test Redis connection: `redis-cli ping`
+- Restart services: `docker-compose restart`
+
 **Performance Issues:**
 - Limit participants per room
 - Check network bandwidth
 - Monitor server resources
+- Check Redis memory usage in health endpoint
 
 ## Contributing
 
