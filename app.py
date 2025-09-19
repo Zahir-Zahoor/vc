@@ -6,67 +6,55 @@ import logging
 import os
 import redis
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 import uuid
-import hashlib
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'videochat_production_secret_key_2024')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'chatapp_secret_key_2024')
 
 # Rate limiting
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
+    default_limits=["500 per day", "100 per hour"]
 )
 limiter.init_app(app)
 
-# Redis connection with retry logic
+# Redis connection
 def connect_redis():
-    import time
-    max_retries = 3
-    retry_delay = 1
-    
-    for attempt in range(max_retries):
-        try:
-            redis_client = redis.Redis(
-                host=os.environ.get('REDIS_HOST', 'localhost'),
-                port=int(os.environ.get('REDIS_PORT', 6379)),
-                decode_responses=True,
-                socket_connect_timeout=3,
-                socket_timeout=3,
-                retry_on_timeout=True,
-                health_check_interval=30
-            )
-            redis_client.ping()
-            logger.info(f"Connected to Redis at {redis_client.connection_pool.connection_kwargs['host']}:{redis_client.connection_pool.connection_kwargs['port']}")
-            return redis_client, True
-        except Exception as e:
-            logger.warning(f"Redis connection attempt {attempt + 1}/{max_retries} failed: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(retry_delay)
-            
-    logger.error("Failed to connect to Redis, using in-memory storage")
-    return None, False
+    try:
+        redis_client = redis.Redis(
+            host=os.environ.get('REDIS_HOST', 'localhost'),
+            port=int(os.environ.get('REDIS_PORT', 6379)),
+            decode_responses=True,
+            socket_connect_timeout=3,
+            socket_timeout=3,
+            retry_on_timeout=True
+        )
+        redis_client.ping()
+        logger.info("Connected to Redis")
+        return redis_client, True
+    except Exception as e:
+        logger.warning(f"Redis connection failed: {e}")
+        return None, False
 
 redis_client, USE_REDIS = connect_redis()
+socketio = SocketIO(app, cors_allowed_origins="*")
 
-socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
-
-# In-memory fallback storage
+# In-memory storage
 users = {}
 rooms = {}
-active_connections = set()
+active_calls = {}
 
-class DataStore:
+class ChatStore:
     @staticmethod
     def set_user(sid, data):
         if USE_REDIS:
             redis_client.hset(f"user:{sid}", mapping=data)
-            redis_client.expire(f"user:{sid}", 3600)  # 1 hour expiry
+            redis_client.expire(f"user:{sid}", 7200)
         else:
             users[sid] = data
     
@@ -89,20 +77,19 @@ class DataStore:
     def add_to_room(room, sid):
         if USE_REDIS:
             redis_client.sadd(f"room:{room}", sid)
-            redis_client.expire(f"room:{room}", 3600)
+            redis_client.expire(f"room:{room}", 7200)
         else:
             if room not in rooms:
-                rooms[room] = []
-            if sid not in rooms[room]:
-                rooms[room].append(sid)
+                rooms[room] = set()
+            rooms[room].add(sid)
     
     @staticmethod
     def remove_from_room(room, sid):
         if USE_REDIS:
             redis_client.srem(f"room:{room}", sid)
         else:
-            if room in rooms and sid in rooms[room]:
-                rooms[room].remove(sid)
+            if room in rooms:
+                rooms[room].discard(sid)
                 if not rooms[room]:
                     del rooms[room]
     
@@ -111,105 +98,42 @@ class DataStore:
         if USE_REDIS:
             return list(redis_client.smembers(f"room:{room}"))
         else:
-            return rooms.get(room, [])
-    
-    @staticmethod
-    def add_connection(sid):
-        if USE_REDIS:
-            redis_client.sadd("active_connections", sid)
-        else:
-            active_connections.add(sid)
-    
-    @staticmethod
-    def remove_connection(sid):
-        if USE_REDIS:
-            redis_client.srem("active_connections", sid)
-        else:
-            active_connections.discard(sid)
-    
-    @staticmethod
-    def is_connected(sid):
-        if USE_REDIS:
-            return redis_client.sismember("active_connections", sid)
-        else:
-            return sid in active_connections
+            return list(rooms.get(room, set()))
 
 @app.route('/')
 def index():
-    return render_template('index.html')
-
-@app.route('/test')
-def test():
-    return render_template('test.html')
+    return render_template('chat.html')
 
 @app.route('/health')
 def health_check():
-    redis_status = 'disconnected'
-    redis_info = None
-    
-    if USE_REDIS and redis_client:
-        try:
-            redis_client.ping()
-            redis_status = 'connected'
-            redis_info = {
-                'host': os.environ.get('REDIS_HOST', 'localhost'),
-                'port': int(os.environ.get('REDIS_PORT', 6379)),
-                'memory_usage': redis_client.info('memory').get('used_memory_human', 'unknown')
-            }
-        except:
-            redis_status = 'error'
-    
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'redis': {
-            'enabled': USE_REDIS,
-            'status': redis_status,
-            'info': redis_info
-        },
-        'connections': len(active_connections) if not USE_REDIS else (redis_client.scard("active_connections") if redis_client else 0)
-    })
-
-@app.route('/api/room/<room_id>/info')
-@limiter.limit("10 per minute")
-def room_info(room_id):
-    users_in_room = DataStore.get_room_users(room_id)
-    user_details = []
-    for sid in users_in_room:
-        user_data = DataStore.get_user(sid)
-        if user_data:
-            user_details.append({
-                'username': user_data.get('username'),
-                'joined_at': user_data.get('joined_at')
-            })
-    
-    return jsonify({
-        'room_id': room_id,
-        'participant_count': len(users_in_room),
-        'participants': user_details
+        'redis': USE_REDIS,
+        'active_users': len(users) if not USE_REDIS else 'redis'
     })
 
 @socketio.on('connect')
 def on_connect():
-    DataStore.add_connection(request.sid)
     logger.info(f'User {request.sid} connected')
-    emit('connection_status', {
-        'status': 'connected', 
-        'id': request.sid,
-        'server_time': datetime.now().isoformat()
-    })
 
 @socketio.on('disconnect')
 def on_disconnect():
-    DataStore.remove_connection(request.sid)
-    user_data = DataStore.get_user(request.sid)
+    user_data = ChatStore.get_user(request.sid)
     
     if user_data:
         room = user_data.get('room')
         username = user_data.get('username')
         
-        DataStore.remove_from_room(room, request.sid)
-        DataStore.delete_user(request.sid)
+        ChatStore.remove_from_room(room, request.sid)
+        ChatStore.delete_user(request.sid)
+        
+        # End any active calls
+        if request.sid in active_calls:
+            call_partner = active_calls[request.sid]
+            emit('call_ended', room=call_partner)
+            active_calls.pop(request.sid, None)
+            active_calls.pop(call_partner, None)
         
         # Notify room
         emit('user_left', {
@@ -218,64 +142,45 @@ def on_disconnect():
             'timestamp': datetime.now().isoformat()
         }, room=room)
         
-        # Update room count
-        remaining_users = DataStore.get_room_users(room)
-        emit('room_users_updated', {
-            'count': len(remaining_users)
-        }, room=room)
-        
         logger.info(f'User {username} left room {room}')
 
 @socketio.on('join_room')
-@limiter.limit("5 per minute")
+@limiter.limit("10 per minute")
 def on_join_room(data):
     try:
         room = data.get('room', '').strip()
         username = data.get('username', '').strip()
         
-        logger.info(f'JOIN_ROOM received: username={username}, room={room}, sid={request.sid}')
-        
-        # Enhanced validation
         if not room or not username:
-            logger.warning(f'Invalid join_room data: {data}')
-            emit('error', {'message': 'Room name and username are required'})
+            emit('error', {'message': 'Room and username required'})
             return
         
         if len(username) > 50 or len(room) > 50:
-            emit('error', {'message': 'Username and room name must be less than 50 characters'})
+            emit('error', {'message': 'Username and room name too long'})
             return
         
-        if len(username) < 2:
-            emit('error', {'message': 'Username must be at least 2 characters'})
+        # Check room capacity
+        current_users = ChatStore.get_room_users(room)
+        if len(current_users) >= 100:
+            emit('error', {'message': 'Room is full'})
             return
         
-        # Check room capacity (max 50 users)
-        current_users = DataStore.get_room_users(room)
-        if len(current_users) >= 50:
-            emit('error', {'message': 'Room is full (maximum 50 participants)'})
-            return
-        
-        # Generate user session
-        session_id = str(uuid.uuid4())
         user_data = {
             'username': username,
             'room': room,
             'joined_at': datetime.now().isoformat(),
-            'session_id': session_id
+            'status': 'online'
         }
         
         join_room(room)
-        DataStore.set_user(request.sid, user_data)
-        DataStore.add_to_room(room, request.sid)
-        
-        logger.info(f'User {username} successfully joined room {room}')
+        ChatStore.set_user(request.sid, user_data)
+        ChatStore.add_to_room(room, request.sid)
         
         # Success response
         emit('room_joined', {
             'room': room,
             'username': username,
-            'session_id': session_id,
-            'participant_count': len(DataStore.get_room_users(room))
+            'users_count': len(ChatStore.get_room_users(room))
         })
         
         # Notify others
@@ -285,27 +190,26 @@ def on_join_room(data):
             'timestamp': datetime.now().isoformat()
         }, room=room, include_self=False)
         
-        logger.info(f'Notified room {room} about new user {username}')
+        logger.info(f'User {username} joined room {room}')
         
     except Exception as e:
         logger.error(f'Error in join_room: {str(e)}')
         emit('error', {'message': 'Failed to join room'})
 
 @socketio.on('send_message')
-@limiter.limit("30 per minute")
+@limiter.limit("60 per minute")
 def handle_message(data):
     try:
-        user_data = DataStore.get_user(request.sid)
+        user_data = ChatStore.get_user(request.sid)
         if not user_data:
-            emit('error', {'message': 'User not in any room'})
+            emit('error', {'message': 'Not in any room'})
             return
         
         message = data.get('message', '').strip()
-        if not message or len(message) > 1000:
-            emit('error', {'message': 'Invalid message length'})
+        if not message or len(message) > 2000:
+            emit('error', {'message': 'Invalid message'})
             return
         
-        # Message with enhanced data
         message_data = {
             'id': str(uuid.uuid4()),
             'username': user_data['username'],
@@ -321,86 +225,111 @@ def handle_message(data):
         logger.error(f'Error handling message: {e}')
         emit('error', {'message': 'Failed to send message'})
 
-# Enhanced WebRTC signaling with validation
-@socketio.on('offer')
-def handle_offer(data):
+# WebRTC Call Signaling
+@socketio.on('call_offer')
+def handle_call_offer(data):
     try:
-        target_sid = data.get('target')
-        if not target_sid or not DataStore.is_connected(target_sid):
-            emit('error', {'message': 'Target user not available'})
+        user_data = ChatStore.get_user(request.sid)
+        if not user_data:
             return
         
-        emit('offer', {
+        offer = data.get('offer')
+        call_type = data.get('type', 'audio')
+        room = data.get('room') or user_data.get('room')
+        
+        if not offer or not room:
+            return
+        
+        # Send offer to all other users in room
+        emit('call_offer', {
             'from': request.sid,
-            'offer': data['offer'],
+            'username': user_data['username'],
+            'offer': offer,
+            'type': call_type,
             'timestamp': datetime.now().isoformat()
-        }, room=target_sid)
+        }, room=room, include_self=False)
+        
+        logger.info(f'Call offer from {user_data["username"]} ({call_type}) in room {room}')
         
     except Exception as e:
-        logger.error(f'Error handling offer: {e}')
+        logger.error(f'Error handling call offer: {e}')
 
-@socketio.on('answer')
-def handle_answer(data):
+@socketio.on('call_answer')
+def handle_call_answer(data):
     try:
         target_sid = data.get('target')
-        if not target_sid or not DataStore.is_connected(target_sid):
+        answer = data.get('answer')
+        room = data.get('room')
+        
+        if not target_sid or not answer:
             return
         
-        emit('answer', {
+        # Send answer to the specific target
+        emit('call_answer', {
             'from': request.sid,
-            'answer': data['answer'],
+            'answer': answer,
             'timestamp': datetime.now().isoformat()
         }, room=target_sid)
         
+        logger.info(f'Call answer from {request.sid} to {target_sid}')
+        
     except Exception as e:
-        logger.error(f'Error handling answer: {e}')
+        logger.error(f'Error handling call answer: {e}')
 
 @socketio.on('ice_candidate')
 def handle_ice_candidate(data):
     try:
-        target_sid = data.get('target')
-        if not target_sid or not DataStore.is_connected(target_sid):
+        candidate = data.get('candidate')
+        room = data.get('room')
+        
+        if not candidate or not room:
             return
         
+        user_data = ChatStore.get_user(request.sid)
+        if not user_data:
+            return
+        
+        # Send ICE candidate to all other users in room
         emit('ice_candidate', {
             'from': request.sid,
-            'candidate': data['candidate']
-        }, room=target_sid)
+            'candidate': candidate
+        }, room=room, include_self=False)
         
     except Exception as e:
         logger.error(f'Error handling ICE candidate: {e}')
 
-@socketio.on('video_started')
-def handle_video_started():
-    logger.info(f'VIDEO_STARTED received from {request.sid}')
-    user_data = DataStore.get_user(request.sid)
-    if user_data:
-        logger.info(f'Notifying room {user_data["room"]} that {user_data["username"]} started video')
-        emit('user_video_started', {
-            'user': user_data['username'],
-            'sid': request.sid,
-            'timestamp': datetime.now().isoformat()
-        }, room=user_data['room'], include_self=False)
-    else:
-        logger.warning(f'video_started from unknown user: {request.sid}')
+@socketio.on('call_ended')
+def handle_call_ended():
+    try:
+        if request.sid in active_calls:
+            partner_sid = active_calls[request.sid]
+            
+            # Clean up call state
+            active_calls.pop(request.sid, None)
+            if partner_sid != 'pending':
+                active_calls.pop(partner_sid, None)
+                emit('call_ended', room=partner_sid)
+        
+        logger.info(f'Call ended by {request.sid}')
+        
+    except Exception as e:
+        logger.error(f'Error handling call end: {e}')
 
-@socketio.on('video_stopped')
-def handle_video_stopped():
-    logger.info(f'VIDEO_STOPPED received from {request.sid}')
-    user_data = DataStore.get_user(request.sid)
-    if user_data:
-        logger.info(f'Notifying room {user_data["room"]} that {user_data["username"]} stopped video')
-        emit('user_video_stopped', {
-            'user': user_data['username'],
-            'sid': request.sid,
-            'timestamp': datetime.now().isoformat()
-        }, room=user_data['room'], include_self=False)
-    else:
-        logger.warning(f'video_stopped from unknown user: {request.sid}')
+@socketio.on('call_declined')
+def handle_call_declined(data):
+    try:
+        target_sid = data.get('to')
+        if target_sid:
+            emit('call_declined', room=target_sid)
+            active_calls.pop(target_sid, None)
+        
+    except Exception as e:
+        logger.error(f'Error handling call decline: {e}')
 
+# Status updates
 @socketio.on('typing_start')
 def handle_typing_start():
-    user_data = DataStore.get_user(request.sid)
+    user_data = ChatStore.get_user(request.sid)
     if user_data:
         emit('user_typing', {
             'user': user_data['username'],
@@ -409,27 +338,23 @@ def handle_typing_start():
 
 @socketio.on('typing_stop')
 def handle_typing_stop():
-    user_data = DataStore.get_user(request.sid)
+    user_data = ChatStore.get_user(request.sid)
     if user_data:
         emit('user_typing', {
             'user': user_data['username'],
             'typing': False
         }, room=user_data['room'], include_self=False)
 
-@socketio.on('ping')
-def handle_ping(data):
-    emit('pong', {'timestamp': datetime.now().isoformat()})
-
 @socketio.on_error_default
 def default_error_handler(e):
     logger.error(f'SocketIO error: {str(e)}')
-    emit('error', {'message': 'An unexpected error occurred'})
+    emit('error', {'message': 'An error occurred'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('DEBUG', 'False').lower() == 'true'
     
-    logger.info(f'Starting Enhanced VideoChat server on port {port}')
+    logger.info(f'Starting ChatApp server on port {port}')
     logger.info(f'Redis enabled: {USE_REDIS}')
     
     socketio.run(
