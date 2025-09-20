@@ -1,0 +1,4 @@
+Flask==2.3.3
+Flask-SocketIO==5.3.6
+redis==5.0.1
+kafka-python==2.0.2
