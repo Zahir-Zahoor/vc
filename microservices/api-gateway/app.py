@@ -60,7 +60,6 @@ def create_direct_chat():
     user1 = data['user1']
     user2 = data['user2']
     
-    # Create deterministic room ID for direct chat
     users = sorted([user1, user2])
     room_id = f"dm_{users[0]}_{users[1]}"
     
