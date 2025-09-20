@@ -2,78 +2,142 @@ from flask import Flask, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import redis
 import json
+import logging
+import requests
 import os
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'websocket-secret'
-socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
+app.config['SECRET_KEY'] = 'your-secret-key'
+socketio = SocketIO(app, cors_allowed_origins="*")
 
-redis_client = redis.Redis.from_url(os.getenv('REDIS_URL', 'redis://localhost:6379'))
+MESSAGING_SERVICE_URL = os.getenv('MESSAGING_SERVICE_URL', 'http://messaging-service:5000')
 
-@socketio.on('connect')
-def handle_connect():
-    print(f"Client connected: {request.sid}")
-    emit('connected', {'status': 'success'})
+try:
+    redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+    redis_client.ping()
+    print("✅ Connected to Redis")
+except:
+    print("❌ Redis connection failed, using in-memory storage")
+    redis_client = None
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    print(f"Client disconnected: {request.sid}")
-
-@socketio.on('join_room')
-def handle_join_room(data):
-    print(f"Join room event: {data}")
-    room_id = str(data['room_id'])
-    user_id = data['user_id']
-    join_room(room_id)
-    print(f"User {user_id} joined room {room_id}")
-    emit('room_joined', {'room_id': room_id, 'user_id': user_id}, room=room_id)
-
-@socketio.on('send_message')
-def handle_message(data):
-    print(f"Message event: {data}")
-    room_id = str(data['room_id'])
-    user_id = data['user_id']
-    message = data['message']
-    timestamp = data.get('timestamp')
-    
-    # Broadcast message to all users in the room
-    emit('receive_message', {
-        'user_id': user_id,
-        'message': message,
-        'timestamp': timestamp,
-        'room_id': room_id
-    }, room=room_id)
-    print(f"Message broadcasted to room {room_id}")
-
-@socketio.on('typing_start')
-def handle_typing_start(data):
-    print(f"Typing start: {data}")
-    room_id = str(data['room_id'])
-    user_id = data['user_id']
-    
-    # Broadcast typing indicator to others in room
-    emit('user_typing', {
-        'user_id': user_id,
-        'room_id': room_id,
-        'typing': True
-    }, room=room_id, include_self=False)
-
-@socketio.on('typing_stop')
-def handle_typing_stop(data):
-    print(f"Typing stop: {data}")
-    room_id = str(data['room_id'])
-    user_id = data['user_id']
-    
-    # Broadcast stop typing to others in room
-    emit('user_typing', {
-        'user_id': user_id,
-        'room_id': room_id,
-        'typing': False
-    }, room=room_id, include_self=False)
+# In-memory storage as fallback
+rooms = {}
+user_sockets = {}
 
 @app.route('/health')
 def health():
     return {'status': 'healthy'}
+
+@socketio.on('connect')
+def on_connect():
+    print(f'Client connected: {request.sid}')
+    emit('connected', {'status': 'connected'})
+
+@socketio.on('disconnect')
+def on_disconnect():
+    print(f'Client disconnected: {request.sid}')
+    # Remove user from socket mapping
+    for user_id, socket_id in list(user_sockets.items()):
+        if socket_id == request.sid:
+            del user_sockets[user_id]
+            break
+
+@socketio.on('join_room')
+def on_join_room(data):
+    room_id = str(data['room_id'])
+    user_id = data['user_id']
+    
+    join_room(room_id)
+    user_sockets[user_id] = request.sid
+    
+    if redis_client:
+        try:
+            redis_client.sadd(f'room:{room_id}:users', user_id)
+            redis_client.hset(f'user:{user_id}', 'socket_id', request.sid)
+            redis_client.hset(f'user:{user_id}', 'room_id', room_id)
+        except:
+            pass
+    else:
+        if room_id not in rooms:
+            rooms[room_id] = set()
+        rooms[room_id].add(user_id)
+    
+    print(f'{user_id} joined room {room_id}')
+    emit('room_joined', {'room_id': room_id, 'user_id': user_id})
+
+@socketio.on('send_message')
+def on_send_message(data):
+    room_id = str(data['room_id'])
+    user_id = data['user_id']
+    message = data['message']
+    timestamp = data['timestamp']
+    
+    # Emit to all users in room
+    emit('receive_message', {
+        'room_id': room_id,
+        'user_id': user_id,
+        'message': message,
+        'timestamp': timestamp,
+        'delivery_status': 'delivered'
+    }, room=room_id)
+    
+    # Mark as delivered for sender
+    emit('message_delivered', {
+        'timestamp': timestamp,
+        'status': 'delivered'
+    })
+    
+    print(f'Message sent in room {room_id} by {user_id}')
+
+@socketio.on('message_read')
+def on_message_read(data):
+    room_id = str(data['room_id'])
+    timestamp = data['timestamp']
+    user_id = data['user_id']
+    
+    print(f'📖 Message read by {user_id} in room {room_id}, timestamp: {timestamp}')
+    
+    # Update message status in database
+    try:
+        response = requests.post(f'{MESSAGING_SERVICE_URL}/update_message_status', 
+                               json={'timestamp': timestamp, 'status': 'read'})
+        if response.status_code == 200:
+            print(f'✅ Message status updated to read in database')
+        else:
+            print(f'❌ Failed to update message status: {response.status_code}')
+    except Exception as e:
+        print(f'❌ Error updating message status: {e}')
+    
+    # Notify all users in room about read status (including sender)
+    emit('message_status_update', {
+        'timestamp': timestamp,
+        'status': 'read',
+        'read_by': user_id
+    }, room=room_id)
+    
+    print(f'📤 Read receipt sent to room {room_id}')
+
+@socketio.on('typing_start')
+def on_typing_start(data):
+    room_id = str(data['room_id'])
+    user_id = data['user_id']
+    
+    emit('user_typing', {
+        'user_id': user_id,
+        'room_id': room_id,
+        'typing': True
+    }, room=room_id)
+
+@socketio.on('typing_stop')
+def on_typing_stop(data):
+    room_id = str(data['room_id'])
+    user_id = data['user_id']
+    
+    emit('user_typing', {
+        'user_id': user_id,
+        'room_id': room_id,
+        'typing': False
+    }, room=room_id)
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)

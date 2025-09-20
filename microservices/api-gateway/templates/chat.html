@@ -100,13 +100,19 @@
         
         .message { margin-bottom: 15px; display: flex; align-items: flex-end; }
         .message.own { justify-content: flex-end; }
-        .message-bubble { max-width: 70%; padding: 12px 16px; border-radius: 18px; word-wrap: break-word; }
+        .message-bubble { max-width: 70%; padding: 12px 16px; border-radius: 18px; word-wrap: break-word; position: relative; }
         .message.own .message-bubble { background: #005c4b; color: #e9edef; border-bottom-right-radius: 4px; }
         .message:not(.own) .message-bubble { background: #202c33; color: #e9edef; border-bottom-left-radius: 4px; }
-        .message-info { font-size: 11px; color: #8696a0; margin-top: 4px; text-align: right; }
-        .message:not(.own) .message-info { text-align: left; }
+        .message-info { font-size: 11px; color: #8696a0; margin-top: 4px; text-align: right; display: flex; align-items: center; gap: 5px; }
+        .message:not(.own) .message-info { text-align: left; justify-content: flex-start; }
+        .message.own .message-info { justify-content: flex-end; }
         .message-sender { font-weight: 600; color: #00a884; font-size: 13px; margin-bottom: 2px; }
         .message.own .message-sender { display: none; }
+        
+        .status-icon { font-size: 12px; }
+        .status-icon.sent::after { content: '✓'; color: #8696a0; }
+        .status-icon.delivered::after { content: '✓✓'; color: #8696a0; }
+        .status-icon.read::after { content: '✓✓'; color: #53bdeb; }
         
         .typing-dots { display: flex; gap: 3px; }
         .typing-dot { width: 6px; height: 6px; background: #00a884; border-radius: 50%; animation: typing 1.4s infinite ease-in-out; }
@@ -195,6 +201,7 @@
         let activeTab = 'groups';
         let typingUsers = new Set();
         let typingTimeout = null;
+        let loadedMessages = new Set(); // Track loaded messages to avoid duplicate read receipts
 
         socket.on('connect', () => {
             console.log('✅ Connected to WebSocket');
@@ -208,34 +215,58 @@
         
         socket.on('receive_message', (data) => {
             console.log('📨 Message received:', data);
-            if (data.room_id == currentRoom) {
-                displayMessage(data.user_id, data.message, data.user_id === currentUser);
+            if (data.room_id == currentRoom && data.user_id !== currentUser) {
+                displayMessage(data.user_id, data.message, false, new Date(data.timestamp), data.delivery_status);
+                
+                // Mark message as read after 1 second
+                setTimeout(() => {
+                    socket.emit('message_read', {
+                        room_id: currentRoom,
+                        timestamp: data.timestamp,
+                        user_id: currentUser
+                    });
+                }, 1000);
             }
         });
 
+        socket.on('message_delivered', (data) => {
+            console.log('✅ Message delivered:', data);
+            updateMessageStatus(data.timestamp, 'delivered');
+        });
+
+        socket.on('message_status_update', (data) => {
+            console.log('📖 Message status update:', data);
+            updateMessageStatus(data.timestamp, data.status);
+        });
+
         socket.on('user_typing', (data) => {
-            console.log('⌨️ Typing event received:', data);
             if (data.room_id == currentRoom && data.user_id !== currentUser) {
                 if (data.typing) {
                     typingUsers.add(data.user_id);
-                    console.log('👤 User started typing:', data.user_id);
                 } else {
                     typingUsers.delete(data.user_id);
-                    console.log('👤 User stopped typing:', data.user_id);
                 }
                 refreshTypingIndicator();
             }
         });
 
+        function updateMessageStatus(timestamp, status) {
+            const messageElement = document.querySelector(`[data-timestamp="${timestamp}"]`);
+            if (messageElement) {
+                const statusElement = messageElement.querySelector('.status-icon');
+                if (statusElement) {
+                    statusElement.className = `status-icon ${status}`;
+                    console.log(`🔄 Updated message ${timestamp} status to ${status}`);
+                }
+            }
+        }
+
         function refreshTypingIndicator() {
             const indicator = document.getElementById('typingIndicator');
             const text = document.getElementById('typingText');
             
-            console.log('🔄 Updating typing indicator, users:', Array.from(typingUsers));
-            
             if (typingUsers.size === 0) {
                 indicator.style.display = 'none';
-                console.log('❌ Hiding typing indicator');
             } else {
                 const users = Array.from(typingUsers);
                 if (users.length === 1) {
@@ -244,7 +275,6 @@
                     text.textContent = `${users.length} people are typing`;
                 }
                 indicator.style.display = 'flex';
-                console.log('✅ Showing typing indicator:', text.textContent);
             }
         }
 
@@ -285,7 +315,9 @@
                     body: JSON.stringify({user_id: userId})
                 });
                 if (response.ok) {
-                    currentUser = userId; updateStatus(true); loadMyGroups();
+                    currentUser = userId; 
+                    updateStatus(true); 
+                    loadMyGroups();
                     document.getElementById('userId').value = '';
                 }
             } catch (error) { console.error('Login failed:', error); }
@@ -321,10 +353,17 @@
             if (!currentUser) return;
             try {
                 const response = await fetch(`/api/groups/${currentUser}`);
-                const groups = await response.json();
+                const data = await response.json();
+                
+                if (data.error || !Array.isArray(data)) {
+                    console.log('No groups found or error:', data);
+                    document.getElementById('groupsList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">No groups found</div>';
+                    return;
+                }
+                
                 const groupsList = document.getElementById('groupsList');
                 groupsList.innerHTML = '';
-                groups.forEach(group => {
+                data.forEach(group => {
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
                     chatItem.onclick = () => startChatRoom(group.id, 'group', group.name);
@@ -337,17 +376,27 @@
                     `;
                     groupsList.appendChild(chatItem);
                 });
-            } catch (error) { console.error('Load groups failed:', error); }
+            } catch (error) { 
+                console.error('Load groups failed:', error);
+                document.getElementById('groupsList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">Failed to load groups</div>';
+            }
         }
 
         async function loadAllUsers() {
             if (!currentUser) return;
             try {
                 const response = await fetch('/api/users');
-                const users = await response.json();
+                const data = await response.json();
+                
+                if (data.error || !Array.isArray(data)) {
+                    console.log('No users found or error:', data);
+                    document.getElementById('directList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">No users found</div>';
+                    return;
+                }
+                
                 const directList = document.getElementById('directList');
                 directList.innerHTML = '';
-                users.filter(user => user.user_id !== currentUser).forEach(user => {
+                data.filter(user => user.user_id !== currentUser).forEach(user => {
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
                     chatItem.onclick = () => beginDirectMessage(user.user_id);
@@ -361,7 +410,10 @@
                     `;
                     directList.appendChild(chatItem);
                 });
-            } catch (error) { console.error('Load users failed:', error); }
+            } catch (error) { 
+                console.error('Load users failed:', error);
+                document.getElementById('directList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">Failed to load users</div>';
+            }
         }
 
         async function beginDirectMessage(otherUser) {
@@ -379,8 +431,7 @@
             if (!chatId) { showWelcome(); return; }
             currentRoom = chatId; currentChatName = name; currentChatType = type;
             typingUsers.clear(); refreshTypingIndicator();
-            
-            console.log('🏠 Joining room:', chatId, 'as', currentUser);
+            loadedMessages.clear(); // Clear loaded messages tracking
             
             document.getElementById('welcomeScreen').style.display = 'none';
             document.getElementById('chatHeader').style.display = 'flex';
@@ -391,22 +442,56 @@
             document.getElementById('chatAvatar').textContent = type === 'group' ? '#' : name[0].toUpperCase();
             document.getElementById('chatStatus').textContent = type === 'group' ? `Group ID: ${chatId}` : 'Direct Message';
             
+            // Clear messages and load from database
             document.getElementById('messages').innerHTML = '';
             await loadChatHistory(chatId);
             
+            // Join WebSocket room for real-time updates
             socket.emit('join_room', {room_id: chatId, user_id: currentUser});
             document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
         }
 
         async function loadChatHistory(roomId) {
             try {
+                console.log('📚 Loading chat history for room:', roomId);
                 const response = await fetch(`/api/messages/${roomId}`);
-                const messages = await response.json();
-                messages.forEach(msg => {
-                    displayMessage(msg.user_id, msg.message, msg.user_id === currentUser, new Date(msg.timestamp));
+                const data = await response.json();
+                
+                if (data.error || !Array.isArray(data)) {
+                    console.log('No messages found or error:', data);
+                    return;
+                }
+                
+                console.log('📚 Loaded messages:', data.length);
+                data.forEach(msg => {
+                    displayMessage(
+                        msg.user_id, 
+                        msg.message, 
+                        msg.user_id === currentUser, 
+                        new Date(msg.timestamp), 
+                        msg.delivery_status || 'delivered'
+                    );
+                    loadedMessages.add(msg.timestamp);
                 });
+                
+                // Mark all unread messages from others as read
+                setTimeout(() => {
+                    data.forEach(msg => {
+                        if (msg.user_id !== currentUser && msg.delivery_status !== 'read') {
+                            console.log('📖 Marking message as read:', msg.timestamp);
+                            socket.emit('message_read', {
+                                room_id: roomId,
+                                timestamp: msg.timestamp,
+                                user_id: currentUser
+                            });
+                        }
+                    });
+                }, 1000);
+                
                 setTimeout(scrollMessagesToBottom, 100);
-            } catch (error) { console.error('Failed to load message history:', error); }
+            } catch (error) { 
+                console.error('Failed to load message history:', error); 
+            }
         }
 
         function showWelcome() {
@@ -415,7 +500,7 @@
             document.getElementById('messages').style.display = 'none';
             document.getElementById('inputArea').style.display = 'none';
             document.getElementById('typingIndicator').style.display = 'none';
-            currentRoom = null; typingUsers.clear();
+            currentRoom = null; typingUsers.clear(); loadedMessages.clear();
         }
 
         async function sendChatMessage() {
@@ -423,34 +508,63 @@
             const message = messageInput.value.trim();
             if (!message || !currentUser || !currentRoom) return;
             
-            console.log('📤 Sending message and stopping typing');
             socket.emit('typing_stop', {room_id: currentRoom, user_id: currentUser});
             
             const timestamp = Date.now();
-            socket.emit('send_message', {
-                room_id: currentRoom, user_id: currentUser, message: message, timestamp: timestamp
-            });
             
+            // Show message immediately for sender
+            displayMessage(currentUser, message, true, new Date(timestamp), 'sent');
+            
+            // Store in database first (for persistence)
             try {
-                await fetch('/api/messages', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({room_id: currentRoom, user_id: currentUser, message: message, timestamp: timestamp})
+                const response = await fetch('/api/messages', {
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        room_id: currentRoom, 
+                        user_id: currentUser, 
+                        message: message, 
+                        timestamp: timestamp, 
+                        delivery_status: 'sent'
+                    })
                 });
-            } catch (error) { console.error('Failed to store message:', error); }
+                
+                if (response.ok) {
+                    console.log('💾 Message stored in database');
+                } else {
+                    console.error('Failed to store message:', response.status);
+                }
+            } catch (error) { 
+                console.error('Failed to store message:', error); 
+            }
+            
+            // Send via WebSocket for real-time delivery
+            socket.emit('send_message', {
+                room_id: currentRoom, 
+                user_id: currentUser, 
+                message: message, 
+                timestamp: timestamp
+            });
             
             messageInput.value = '';
         }
 
-        function displayMessage(sender, message, isOwn, timestamp = new Date()) {
+        function displayMessage(sender, message, isOwn, timestamp = new Date(), deliveryStatus = 'sent') {
             const messagesContainer = document.getElementById('messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isOwn ? 'own' : ''}`;
+            messageDiv.setAttribute('data-timestamp', timestamp.getTime());
+            
             const time = timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
             messageDiv.innerHTML = `
                 <div class="message-bubble">
                     ${!isOwn && currentChatType === 'group' ? `<div class="message-sender">${sender}</div>` : ''}
                     <div class="message-text">${message}</div>
-                    <div class="message-info">${time}</div>
+                    <div class="message-info">
+                        <span>${time}</span>
+                        ${isOwn ? `<span class="status-icon ${deliveryStatus}"></span>` : ''}
+                    </div>
                 </div>
             `;
             messagesContainer.appendChild(messageDiv);
@@ -459,11 +573,9 @@
 
         document.getElementById('messageInput').addEventListener('input', function() {
             if (currentRoom && currentUser) {
-                console.log('⌨️ User typing, sending typing_start');
                 socket.emit('typing_start', {room_id: currentRoom, user_id: currentUser});
                 if (typingTimeout) clearTimeout(typingTimeout);
                 typingTimeout = setTimeout(() => {
-                    console.log('⏰ Typing timeout, sending typing_stop');
                     socket.emit('typing_stop', {room_id: currentRoom, user_id: currentUser});
                 }, 3000);
             }
@@ -477,7 +589,6 @@
 
         document.getElementById('messageInput').addEventListener('blur', function() {
             if (currentRoom && currentUser) {
-                console.log('👋 Input blur, sending typing_stop');
                 socket.emit('typing_stop', {room_id: currentRoom, user_id: currentUser});
             }
         });
