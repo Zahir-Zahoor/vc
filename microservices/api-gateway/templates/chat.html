@@ -5,373 +5,76 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0a1014;
-            height: 100vh;
-            overflow: hidden;
-        }
-        
-        .app-container {
-            display: flex;
-            height: 100vh;
-            background: #111b21;
-        }
-        
-        .sidebar {
-            width: 350px;
-            background: #202c33;
-            border-right: 1px solid #2a3942;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .sidebar-header {
-            background: #2a3942;
-            padding: 20px;
-            color: #e9edef;
-            border-bottom: 1px solid #3b4a54;
-        }
-        
-        .sidebar-header h2 {
-            font-size: 20px;
-            margin-bottom: 15px;
-        }
-        
-        .user-controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        
-        .user-controls input {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            border-radius: 8px;
-            background: #3b4a54;
-            color: #e9edef;
-            font-size: 14px;
-        }
-        
-        .user-controls input::placeholder {
-            color: #8696a0;
-        }
-        
-        .btn {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-        
-        .btn-primary {
-            background: #00a884;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #008f72;
-        }
-        
-        .btn-secondary {
-            background: #3b4a54;
-            color: #e9edef;
-        }
-        
-        .btn-secondary:hover {
-            background: #4a5862;
-        }
-        
-        .group-controls {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        
-        .group-controls input {
-            flex: 1;
-            padding: 8px 12px;
-            border: none;
-            border-radius: 6px;
-            background: #3b4a54;
-            color: #e9edef;
-            font-size: 13px;
-        }
-        
-        .status {
-            background: #1f2937;
-            padding: 12px;
-            border-radius: 8px;
-            color: #e9edef;
-            font-size: 13px;
-            margin-bottom: 15px;
-        }
-        
-        .status.online {
-            background: #065f46;
-            color: #d1fae5;
-        }
-        
-        .chat-tabs {
-            display: flex;
-            background: #2a3942;
-            border-bottom: 1px solid #3b4a54;
-        }
-        
-        .tab {
-            flex: 1;
-            padding: 12px;
-            text-align: center;
-            cursor: pointer;
-            color: #8696a0;
-            border-bottom: 2px solid transparent;
-            transition: all 0.2s;
-        }
-        
-        .tab.active {
-            color: #00a884;
-            border-bottom-color: #00a884;
-        }
-        
-        .tab:hover {
-            background: #3b4a54;
-        }
-        
-        .chat-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 0 20px;
-        }
-        
-        .chat-item {
-            background: #2a3942;
-            padding: 15px;
-            margin-bottom: 8px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            color: #e9edef;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .chat-item:hover {
-            background: #3b4a54;
-        }
-        
-        .chat-item.active {
-            background: #00a884;
-        }
-        
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #00a884;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 16px;
-        }
-        
-        .chat-info {
-            flex: 1;
-        }
-        
-        .chat-name {
-            font-weight: 600;
-            margin-bottom: 2px;
-        }
-        
-        .chat-preview {
-            font-size: 13px;
-            color: #8696a0;
-        }
-        
-        .online-dot {
-            width: 8px;
-            height: 8px;
-            background: #00a884;
-            border-radius: 50%;
-            margin-left: auto;
-        }
-        
-        .chat-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: #0b141a;
-        }
-        
-        .chat-header {
-            background: #202c33;
-            padding: 20px;
-            border-bottom: 1px solid #2a3942;
-            color: #e9edef;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .chat-header h3 {
-            font-size: 18px;
-            margin-bottom: 5px;
-        }
-        
-        .chat-header .status-text {
-            font-size: 13px;
-            color: #8696a0;
-        }
-        
-        .messages-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="chat-bg" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="%23ffffff" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23chat-bg)"/></svg>');
-        }
-        
-        .message {
-            margin-bottom: 15px;
-            display: flex;
-            align-items: flex-end;
-        }
-        
-        .message.own {
-            justify-content: flex-end;
-        }
-        
-        .message-bubble {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 18px;
-            position: relative;
-            word-wrap: break-word;
-        }
-        
-        .message.own .message-bubble {
-            background: #005c4b;
-            color: #e9edef;
-            border-bottom-right-radius: 4px;
-        }
-        
-        .message:not(.own) .message-bubble {
-            background: #202c33;
-            color: #e9edef;
-            border-bottom-left-radius: 4px;
-        }
-        
-        .message-info {
-            font-size: 11px;
-            color: #8696a0;
-            margin-top: 4px;
-            text-align: right;
-        }
-        
-        .message:not(.own) .message-info {
-            text-align: left;
-        }
-        
-        .message-sender {
-            font-weight: 600;
-            color: #00a884;
-            font-size: 13px;
-            margin-bottom: 2px;
-        }
-        
-        .message.own .message-sender {
-            display: none;
-        }
-        
-        .input-area {
-            background: #202c33;
-            padding: 20px;
-            border-top: 1px solid #2a3942;
-        }
-        
-        .input-container {
-            display: flex;
-            gap: 10px;
-            align-items: flex-end;
-        }
-        
-        .message-input {
-            flex: 1;
-            padding: 12px 16px;
-            border: none;
-            border-radius: 24px;
-            background: #2a3942;
-            color: #e9edef;
-            font-size: 15px;
-            resize: none;
-            max-height: 100px;
-            min-height: 44px;
-        }
-        
-        .message-input::placeholder {
-            color: #8696a0;
-        }
-        
-        .send-btn {
-            width: 44px;
-            height: 44px;
-            border: none;
-            border-radius: 50%;
-            background: #00a884;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-        
-        .send-btn:hover {
-            background: #008f72;
-        }
-        
-        .welcome-screen {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: #8696a0;
-            text-align: center;
-        }
-        
-        .welcome-screen h2 {
-            font-size: 32px;
-            margin-bottom: 20px;
-            color: #e9edef;
-        }
-        
-        .welcome-screen p {
-            font-size: 16px;
-            max-width: 400px;
-            line-height: 1.5;
-        }
-        
-        .online-indicator {
-            width: 8px;
-            height: 8px;
-            background: #00a884;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 8px;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a1014; height: 100vh; overflow: hidden; }
+        .app-container { display: flex; height: 100vh; background: #111b21; }
+        .sidebar { width: 350px; background: #202c33; border-right: 1px solid #2a3942; display: flex; flex-direction: column; }
+        .sidebar-header { background: #2a3942; padding: 20px; color: #e9edef; border-bottom: 1px solid #3b4a54; }
+        .sidebar-header h2 { font-size: 20px; margin-bottom: 15px; }
+        .user-controls { display: flex; gap: 10px; margin-bottom: 15px; }
+        .user-controls input { flex: 1; padding: 10px; border: none; border-radius: 8px; background: #3b4a54; color: #e9edef; font-size: 14px; }
+        .user-controls input::placeholder { color: #8696a0; }
+        .btn { padding: 10px 15px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .btn-primary { background: #00a884; color: white; }
+        .btn-primary:hover { background: #008f72; }
+        .btn-secondary { background: #3b4a54; color: #e9edef; }
+        .btn-secondary:hover { background: #4a5862; }
+        .group-controls { display: flex; gap: 10px; margin-bottom: 10px; }
+        .group-controls input { flex: 1; padding: 8px 12px; border: none; border-radius: 6px; background: #3b4a54; color: #e9edef; font-size: 13px; }
+        .status { background: #1f2937; padding: 12px; border-radius: 8px; color: #e9edef; font-size: 13px; margin-bottom: 15px; }
+        .status.online { background: #065f46; color: #d1fae5; }
+        .chat-tabs { display: flex; background: #2a3942; border-bottom: 1px solid #3b4a54; }
+        .tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; color: #8696a0; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab.active { color: #00a884; border-bottom-color: #00a884; }
+        .tab:hover { background: #3b4a54; }
+        .chat-list { flex: 1; overflow-y: auto; padding: 0 20px; }
+        .chat-item { background: #2a3942; padding: 15px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; transition: all 0.2s; color: #e9edef; display: flex; align-items: center; gap: 12px; }
+        .chat-item:hover { background: #3b4a54; }
+        .chat-item.active { background: #00a884; }
+        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: #00a884; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; }
+        .chat-info { flex: 1; }
+        .chat-name { font-weight: 600; margin-bottom: 2px; }
+        .chat-preview { font-size: 13px; color: #8696a0; }
+        .online-dot { width: 8px; height: 8px; background: #00a884; border-radius: 50%; margin-left: auto; }
+        .chat-area { flex: 1; display: flex; flex-direction: column; background: #0b141a; }
+        .main-chat { flex: 1; display: flex; flex-direction: column; }
+        .members-panel { width: 300px; background: #202c33; border-left: 1px solid #2a3942; display: none; flex-direction: column; }
+        .members-header { background: #2a3942; padding: 20px; border-bottom: 1px solid #3b4a54; color: #e9edef; display: flex; justify-content: space-between; align-items: center; }
+        .close-members { background: none; border: none; color: #8696a0; cursor: pointer; font-size: 18px; }
+        .members-list { flex: 1; overflow-y: auto; padding: 20px; }
+        .member-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #2a3942; color: #e9edef; }
+        .member-item:last-child { border-bottom: none; }
+        .member-avatar { width: 35px; height: 35px; border-radius: 50%; background: #00a884; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px; }
+        .member-info { flex: 1; }
+        .member-name { font-weight: 500; margin-bottom: 2px; }
+        .member-role { font-size: 12px; color: #8696a0; text-transform: capitalize; }
+        .admin-badge { background: #f59e0b; color: white; padding: 2px 6px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+        .chat-header { background: #202c33; padding: 20px; border-bottom: 1px solid #2a3942; color: #e9edef; display: flex; align-items: center; gap: 15px; }
+        .chat-header h3 { font-size: 18px; margin-bottom: 5px; }
+        .chat-header .status-text { font-size: 13px; color: #8696a0; }
+        .header-actions { margin-left: auto; display: flex; gap: 10px; }
+        .header-btn { background: none; border: none; color: #8696a0; cursor: pointer; padding: 8px; border-radius: 50%; transition: all 0.2s; }
+        .header-btn:hover { background: #3b4a54; color: #e9edef; }
+        .messages-container { flex: 1; overflow-y: auto; padding: 20px; background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="chat-bg" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="%23ffffff" opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23chat-bg)"/></svg>'); }
+        .message { margin-bottom: 15px; display: flex; align-items: flex-end; }
+        .message.own { justify-content: flex-end; }
+        .message-bubble { max-width: 70%; padding: 12px 16px; border-radius: 18px; position: relative; word-wrap: break-word; }
+        .message.own .message-bubble { background: #005c4b; color: #e9edef; border-bottom-right-radius: 4px; }
+        .message:not(.own) .message-bubble { background: #202c33; color: #e9edef; border-bottom-left-radius: 4px; }
+        .message-info { font-size: 11px; color: #8696a0; margin-top: 4px; text-align: right; }
+        .message:not(.own) .message-info { text-align: left; }
+        .message-sender { font-weight: 600; color: #00a884; font-size: 13px; margin-bottom: 2px; }
+        .message.own .message-sender { display: none; }
+        .input-area { background: #202c33; padding: 20px; border-top: 1px solid #2a3942; }
+        .input-container { display: flex; gap: 10px; align-items: flex-end; }
+        .message-input { flex: 1; padding: 12px 16px; border: none; border-radius: 24px; background: #2a3942; color: #e9edef; font-size: 15px; resize: none; max-height: 100px; min-height: 44px; }
+        .message-input::placeholder { color: #8696a0; }
+        .send-btn { width: 44px; height: 44px; border: none; border-radius: 50%; background: #00a884; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .send-btn:hover { background: #008f72; }
+        .welcome-screen { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8696a0; text-align: center; }
+        .welcome-screen h2 { font-size: 32px; margin-bottom: 20px; color: #e9edef; }
+        .welcome-screen p { font-size: 16px; max-width: 400px; line-height: 1.5; }
+        .online-indicator { width: 8px; height: 8px; background: #00a884; border-radius: 50%; display: inline-block; margin-right: 8px; }
     </style>
 </head>
 <body>
@@ -379,79 +82,61 @@
         <div class="sidebar">
             <div class="sidebar-header">
                 <h2>💬 ChatApp</h2>
-                
                 <div class="user-controls">
                     <input type="text" id="userId" placeholder="Enter your name">
                     <button class="btn btn-primary" onclick="login()">Login</button>
                 </div>
-                
                 <div class="status" id="status">
                     <span class="online-indicator" style="display: none;"></span>
                     <span id="statusText">Offline - Please login</span>
                 </div>
-                
                 <div class="group-controls">
                     <input type="text" id="groupName" placeholder="Group name">
                     <button class="btn btn-secondary" onclick="createGroup()">Create</button>
                 </div>
-                
                 <div class="group-controls">
                     <input type="text" id="joinGroupId" placeholder="Group ID">
                     <button class="btn btn-secondary" onclick="joinGroup()">Join</button>
                 </div>
             </div>
-            
             <div class="chat-tabs">
                 <div class="tab active" id="groupsTab" onclick="switchTab('groups')">Groups</div>
                 <div class="tab" id="directTab" onclick="switchTab('direct')">Direct</div>
             </div>
-            
-            <div class="chat-list" id="groupsList">
-                <div class="chat-item" onclick="selectChat(null, 'group')">
-                    <div class="user-avatar">#</div>
-                    <div class="chat-info">
-                        <div class="chat-name">Welcome</div>
-                        <div class="chat-preview">Select a group to start chatting</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="chat-list" id="directList" style="display: none;">
-                <div class="chat-item" onclick="selectChat(null, 'direct')">
-                    <div class="user-avatar">👤</div>
-                    <div class="chat-info">
-                        <div class="chat-name">Direct Messages</div>
-                        <div class="chat-preview">Select a user to start chatting</div>
-                    </div>
-                </div>
-            </div>
+            <div class="chat-list" id="groupsList"></div>
+            <div class="chat-list" id="directList" style="display: none;"></div>
         </div>
         
         <div class="chat-area">
-            <div class="chat-header" id="chatHeader" style="display: none;">
-                <div class="user-avatar" id="chatAvatar">#</div>
-                <div>
-                    <h3 id="chatTitle">Chat Name</h3>
-                    <div class="status-text" id="chatStatus">Status</div>
+            <div class="main-chat">
+                <div class="chat-header" id="chatHeader" style="display: none;">
+                    <div class="user-avatar" id="chatAvatar">#</div>
+                    <div>
+                        <h3 id="chatTitle">Chat Name</h3>
+                        <div class="status-text" id="chatStatus">Status</div>
+                    </div>
+                    <div class="header-actions">
+                        <button class="header-btn" id="membersBtn" onclick="toggleMembers()" style="display: none;">👥</button>
+                    </div>
+                </div>
+                <div class="welcome-screen" id="welcomeScreen">
+                    <h2>Welcome to ChatApp</h2>
+                    <p>Connect with your team through secure, real-time messaging. Create or join a group, or start a direct conversation.</p>
+                </div>
+                <div class="messages-container" id="messages" style="display: none;"></div>
+                <div class="input-area" id="inputArea" style="display: none;">
+                    <div class="input-container">
+                        <textarea class="message-input" id="messageInput" placeholder="Type a message" rows="1"></textarea>
+                        <button class="send-btn" onclick="sendMessage()">➤</button>
+                    </div>
                 </div>
             </div>
-            
-            <div class="welcome-screen" id="welcomeScreen">
-                <h2>Welcome to ChatApp</h2>
-                <p>Connect with your team through secure, real-time messaging. Create or join a group, or start a direct conversation.</p>
-            </div>
-            
-            <div class="messages-container" id="messages" style="display: none;"></div>
-            
-            <div class="input-area" id="inputArea" style="display: none;">
-                <div class="input-container">
-                    <textarea class="message-input" id="messageInput" placeholder="Type a message" rows="1"></textarea>
-                    <button class="send-btn" onclick="sendMessage()">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                        </svg>
-                    </button>
+            <div class="members-panel" id="membersPanel">
+                <div class="members-header">
+                    <h3>Group Members</h3>
+                    <button class="close-members" onclick="toggleMembers()">×</button>
                 </div>
+                <div class="members-list" id="membersList"></div>
             </div>
         </div>
     </div>
@@ -463,15 +148,10 @@
         let currentChatName = null;
         let currentChatType = null;
         let activeTab = 'groups';
+        let membersVisible = false;
 
-        socket.on('connect', () => {
-            updateConnectionStatus(true);
-        });
-
-        socket.on('disconnect', () => {
-            updateConnectionStatus(false);
-        });
-
+        socket.on('connect', () => updateConnectionStatus(true));
+        socket.on('disconnect', () => updateConnectionStatus(false));
         socket.on('receive_message', (data) => {
             if (data.room_id == currentRoom) {
                 addMessage(data.user_id, data.message, data.user_id === currentUser);
@@ -481,7 +161,6 @@
         function updateConnectionStatus(connected) {
             const indicator = document.querySelector('.online-indicator');
             const statusText = document.getElementById('statusText');
-            
             if (connected && currentUser) {
                 indicator.style.display = 'inline-block';
                 statusText.textContent = `Online as ${currentUser}`;
@@ -497,96 +176,59 @@
             activeTab = tab;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.getElementById(tab + 'Tab').classList.add('active');
-            
             document.getElementById('groupsList').style.display = tab === 'groups' ? 'block' : 'none';
             document.getElementById('directList').style.display = tab === 'direct' ? 'block' : 'none';
-            
-            if (tab === 'direct') {
-                loadUsers();
-            } else {
-                loadUserGroups();
-            }
+            if (tab === 'direct') loadUsers(); else loadUserGroups();
         }
 
         async function login() {
             const userId = document.getElementById('userId').value.trim();
-            if (!userId) {
-                alert('Please enter your name');
-                return;
-            }
-            
+            if (!userId) { alert('Please enter your name'); return; }
             try {
                 const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({user_id: userId})
                 });
-                
                 if (response.ok) {
-                    currentUser = userId;
-                    updateConnectionStatus(true);
-                    loadUserGroups();
+                    currentUser = userId; updateConnectionStatus(true); loadUserGroups();
                     document.getElementById('userId').value = '';
                 }
-            } catch (error) {
-                console.error('Login failed:', error);
-            }
+            } catch (error) { console.error('Login failed:', error); }
         }
 
         async function createGroup() {
             const groupName = document.getElementById('groupName').value.trim();
-            if (!groupName || !currentUser) {
-                alert('Please login and enter a group name');
-                return;
-            }
-            
+            if (!groupName || !currentUser) { alert('Please login and enter a group name'); return; }
             try {
                 const response = await fetch('/api/create_group', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({name: groupName, creator_id: currentUser})
                 });
-                
                 const data = await response.json();
                 alert(`Group "${groupName}" created! ID: ${data.group_id}`);
-                document.getElementById('groupName').value = '';
-                loadUserGroups();
-            } catch (error) {
-                console.error('Create group failed:', error);
-            }
+                document.getElementById('groupName').value = ''; loadUserGroups();
+            } catch (error) { console.error('Create group failed:', error); }
         }
 
         async function joinGroup() {
             const groupId = document.getElementById('joinGroupId').value.trim();
-            if (!groupId || !currentUser) {
-                alert('Please login and enter a group ID');
-                return;
-            }
-            
+            if (!groupId || !currentUser) { alert('Please login and enter a group ID'); return; }
             try {
                 await fetch('/api/join_group', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({group_id: parseInt(groupId), user_id: currentUser})
                 });
-                
-                document.getElementById('joinGroupId').value = '';
-                loadUserGroups();
-            } catch (error) {
-                console.error('Join group failed:', error);
-            }
+                document.getElementById('joinGroupId').value = ''; loadUserGroups();
+            } catch (error) { console.error('Join group failed:', error); }
         }
 
         async function loadUserGroups() {
             if (!currentUser) return;
-            
             try {
                 const response = await fetch(`/api/groups/${currentUser}`);
                 const groups = await response.json();
-                
                 const groupsList = document.getElementById('groupsList');
                 groupsList.innerHTML = '';
-                
                 groups.forEach(group => {
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
@@ -600,21 +242,16 @@
                     `;
                     groupsList.appendChild(chatItem);
                 });
-            } catch (error) {
-                console.error('Load groups failed:', error);
-            }
+            } catch (error) { console.error('Load groups failed:', error); }
         }
 
         async function loadUsers() {
             if (!currentUser) return;
-            
             try {
                 const response = await fetch('/api/users');
                 const users = await response.json();
-                
                 const directList = document.getElementById('directList');
                 directList.innerHTML = '';
-                
                 users.filter(user => user.user_id !== currentUser).forEach(user => {
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
@@ -629,37 +266,24 @@
                     `;
                     directList.appendChild(chatItem);
                 });
-            } catch (error) {
-                console.error('Load users failed:', error);
-            }
+            } catch (error) { console.error('Load users failed:', error); }
         }
 
         async function startDirectChat(otherUser) {
             try {
                 const response = await fetch('/api/direct_chat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({user1: currentUser, user2: otherUser})
                 });
-                
                 const data = await response.json();
                 selectChat(data.room_id, 'direct', otherUser);
-            } catch (error) {
-                console.error('Start direct chat failed:', error);
-            }
+            } catch (error) { console.error('Start direct chat failed:', error); }
         }
 
         async function selectChat(chatId, type, name) {
-            if (!chatId) {
-                showWelcomeScreen();
-                return;
-            }
+            if (!chatId) { showWelcomeScreen(); return; }
+            currentRoom = chatId; currentChatName = name; currentChatType = type;
             
-            currentRoom = chatId;
-            currentChatName = name;
-            currentChatType = type;
-            
-            // Update UI
             document.getElementById('welcomeScreen').style.display = 'none';
             document.getElementById('chatHeader').style.display = 'flex';
             document.getElementById('messages').style.display = 'block';
@@ -668,34 +292,53 @@
             document.getElementById('chatTitle').textContent = name;
             document.getElementById('chatAvatar').textContent = type === 'group' ? '#' : name[0].toUpperCase();
             document.getElementById('chatStatus').textContent = type === 'group' ? `Group ID: ${chatId}` : 'Direct Message';
+            document.getElementById('membersBtn').style.display = type === 'group' ? 'block' : 'none';
             
-            // Clear messages
             document.getElementById('messages').innerHTML = '';
-            
-            // Load message history
             await loadMessageHistory(chatId);
+            if (type === 'group') await loadGroupMembers(chatId);
             
-            // Join room
             socket.emit('join_room', {room_id: chatId, user_id: currentUser});
-            
-            // Update active chat
-            document.querySelectorAll('.chat-item').forEach(item => {
-                item.classList.remove('active');
-            });
+            document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
             event.target.closest('.chat-item').classList.add('active');
+        }
+
+        async function loadGroupMembers(groupId) {
+            try {
+                const response = await fetch(`/api/group_members/${groupId}`);
+                const members = await response.json();
+                const membersList = document.getElementById('membersList');
+                membersList.innerHTML = '';
+                members.forEach(member => {
+                    const memberItem = document.createElement('div');
+                    memberItem.className = 'member-item';
+                    memberItem.innerHTML = `
+                        <div class="member-avatar">${member.user_id[0].toUpperCase()}</div>
+                        <div class="member-info">
+                            <div class="member-name">${member.user_id}</div>
+                            <div class="member-role">${member.role}</div>
+                        </div>
+                        ${member.role === 'admin' ? '<div class="admin-badge">Admin</div>' : ''}
+                    `;
+                    membersList.appendChild(memberItem);
+                });
+            } catch (error) { console.error('Failed to load group members:', error); }
+        }
+
+        function toggleMembers() {
+            membersVisible = !membersVisible;
+            document.getElementById('membersPanel').style.display = membersVisible ? 'flex' : 'none';
+            document.querySelector('.chat-area').style.flexDirection = membersVisible ? 'row' : 'column';
         }
 
         async function loadMessageHistory(roomId) {
             try {
                 const response = await fetch(`/api/messages/${roomId}`);
                 const messages = await response.json();
-                
                 messages.forEach(msg => {
                     addMessage(msg.user_id, msg.message, msg.user_id === currentUser, new Date(msg.timestamp));
                 });
-            } catch (error) {
-                console.error('Failed to load message history:', error);
-            }
+            } catch (error) { console.error('Failed to load message history:', error); }
         }
 
         function showWelcomeScreen() {
@@ -703,52 +346,35 @@
             document.getElementById('chatHeader').style.display = 'none';
             document.getElementById('messages').style.display = 'none';
             document.getElementById('inputArea').style.display = 'none';
-            currentRoom = null;
+            document.getElementById('membersPanel').style.display = 'none';
+            currentRoom = null; membersVisible = false;
         }
 
         async function sendMessage() {
             const messageInput = document.getElementById('messageInput');
             const message = messageInput.value.trim();
-            
             if (!message || !currentUser || !currentRoom) return;
-            
             const timestamp = Date.now();
             
-            // Send via WebSocket for real-time delivery
             socket.emit('send_message', {
-                room_id: currentRoom,
-                user_id: currentUser,
-                message: message,
-                timestamp: timestamp
+                room_id: currentRoom, user_id: currentUser, message: message, timestamp: timestamp
             });
             
-            // Store in messaging service for history
             try {
                 await fetch('/api/messages', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        room_id: currentRoom,
-                        user_id: currentUser,
-                        message: message,
-                        timestamp: timestamp
-                    })
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({room_id: currentRoom, user_id: currentUser, message: message, timestamp: timestamp})
                 });
-            } catch (error) {
-                console.error('Failed to store message:', error);
-            }
+            } catch (error) { console.error('Failed to store message:', error); }
             
-            messageInput.value = '';
-            messageInput.style.height = 'auto';
+            messageInput.value = ''; messageInput.style.height = 'auto';
         }
 
         function addMessage(sender, message, isOwn, timestamp = new Date()) {
             const messagesContainer = document.getElementById('messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isOwn ? 'own' : ''}`;
-            
             const time = timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            
             messageDiv.innerHTML = `
                 <div class="message-bubble">
                     ${!isOwn && currentChatType === 'group' ? `<div class="message-sender">${sender}</div>` : ''}
@@ -756,26 +382,21 @@
                     <div class="message-info">${time}</div>
                 </div>
             `;
-            
             messagesContainer.appendChild(messageDiv);
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
 
-        // Auto-resize textarea
         document.getElementById('messageInput').addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 100) + 'px';
         });
 
-        // Send message on Enter
         document.getElementById('messageInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
+                e.preventDefault(); sendMessage();
             }
         });
 
-        // Initialize
         showWelcomeScreen();
     </script>
 </body>

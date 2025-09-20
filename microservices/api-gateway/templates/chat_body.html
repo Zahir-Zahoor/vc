@@ -1,0 +1,100 @@
+<body>
+    <div class="app-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>💬 ChatApp</h2>
+                
+                <div class="user-controls">
+                    <input type="text" id="userId" placeholder="Enter your name">
+                    <button class="btn btn-primary" onclick="login()">Login</button>
+                </div>
+                
+                <div class="status" id="status">
+                    <span class="online-indicator" style="display: none;"></span>
+                    <span id="statusText">Offline - Please login</span>
+                </div>
+                
+                <div class="group-controls">
+                    <input type="text" id="groupName" placeholder="Group name">
+                    <button class="btn btn-secondary" onclick="createGroup()">Create</button>
+                </div>
+                
+                <div class="group-controls">
+                    <input type="text" id="joinGroupId" placeholder="Group ID">
+                    <button class="btn btn-secondary" onclick="joinGroup()">Join</button>
+                </div>
+            </div>
+            
+            <div class="chat-tabs">
+                <div class="tab active" id="groupsTab" onclick="switchTab('groups')">Groups</div>
+                <div class="tab" id="directTab" onclick="switchTab('direct')">Direct</div>
+            </div>
+            
+            <div class="chat-list" id="groupsList">
+                <div class="chat-item" onclick="selectChat(null, 'group')">
+                    <div class="user-avatar">#</div>
+                    <div class="chat-info">
+                        <div class="chat-name">Welcome</div>
+                        <div class="chat-preview">Select a group to start chatting</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-list" id="directList" style="display: none;">
+                <div class="chat-item" onclick="selectChat(null, 'direct')">
+                    <div class="user-avatar">👤</div>
+                    <div class="chat-info">
+                        <div class="chat-name">Direct Messages</div>
+                        <div class="chat-preview">Select a user to start chatting</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-area">
+            <div class="main-chat">
+                <div class="chat-header" id="chatHeader" style="display: none;">
+                    <div class="user-avatar" id="chatAvatar">#</div>
+                    <div>
+                        <h3 id="chatTitle">Chat Name</h3>
+                        <div class="status-text" id="chatStatus">Status</div>
+                    </div>
+                    <div class="header-actions">
+                        <button class="header-btn" id="membersBtn" onclick="toggleMembers()" style="display: none;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zm4 18v-6h2.5l-2.54-7.63A3.01 3.01 0 0 0 16.5 6.5c-.83 0-1.58.34-2.12.89L12 10.5 9.62 7.39C9.08 6.84 8.33 6.5 7.5 6.5c-1.4 0-2.54 1.15-2.96 2.87L2 17h2.5v5h15zM12.5 11.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5.67-1.5 1.5-1.5z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="welcome-screen" id="welcomeScreen">
+                    <h2>Welcome to ChatApp</h2>
+                    <p>Connect with your team through secure, real-time messaging. Create or join a group, or start a direct conversation.</p>
+                </div>
+                
+                <div class="messages-container" id="messages" style="display: none;"></div>
+                
+                <div class="input-area" id="inputArea" style="display: none;">
+                    <div class="input-container">
+                        <textarea class="message-input" id="messageInput" placeholder="Type a message" rows="1"></textarea>
+                        <button class="send-btn" onclick="sendMessage()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="members-panel" id="membersPanel">
+                <div class="members-header">
+                    <h3>Group Members</h3>
+                    <button class="close-members" onclick="toggleMembers()">×</button>
+                </div>
+                <div class="members-list" id="membersList">
+                    <!-- Members will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>

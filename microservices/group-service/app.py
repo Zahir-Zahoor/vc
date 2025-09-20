@@ -67,6 +67,19 @@ def get_groups(user_id):
     conn.close()
     return jsonify(groups)
 
+@app.route('/get_group_members/<group_id>')
+def get_group_members(group_id):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT gm.user_id, gm.role FROM group_members gm WHERE gm.group_id = %s",
+        (group_id,)
+    )
+    members = [{'user_id': row[0], 'role': row[1]} for row in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return jsonify(members)
+
 @app.route('/health')
 def health():
     return {'status': 'healthy'}

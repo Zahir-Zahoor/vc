@@ -38,6 +38,14 @@ def get_groups(user_id):
     response = requests.get(f'{GROUP_SERVICE}/get_groups/{user_id}')
     return jsonify(response.json())
 
+@app.route('/api/group_members/<group_id>')
+def get_group_members(group_id):
+    try:
+        response = requests.get(f'{GROUP_SERVICE}/get_group_members/{group_id}')
+        return jsonify(response.json())
+    except:
+        return jsonify([])
+
 @app.route('/api/users')
 def get_users():
     try:
