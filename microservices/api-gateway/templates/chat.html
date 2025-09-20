@@ -115,8 +115,10 @@
         .message-input { flex: 1; padding: 12px 16px; border: none; border-radius: 24px; background: #2a3942; color: #e9edef; font-size: 15px; resize: none; height: 44px; }
         .send-btn { width: 44px; height: 44px; border: none; border-radius: 50%; background: #00a884; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         
-        .message { margin-bottom: 15px; display: flex; align-items: flex-end; }
+        .message { margin-bottom: 15px; display: flex; align-items: flex-end; gap: 8px; }
         .message.own { justify-content: flex-end; }
+        .message.own .message-avatar { display: none; }
+        .message-avatar { flex-shrink: 0; }
         .message-bubble { max-width: 70%; padding: 12px 16px; border-radius: 18px; word-wrap: break-word; position: relative; }
         .message.own .message-bubble { background: #005c4b; color: #e9edef; border-bottom-right-radius: 4px; }
         .message:not(.own) .message-bubble { background: #202c33; color: #e9edef; border-bottom-left-radius: 4px; }
@@ -221,6 +223,27 @@
         let typingUsers = new Set();
         let typingTimeout = null;
         let unreadCounts = {};
+        let userAvatars = {}; // Store user avatar colors
+
+        function generateAvatarColor(userId) {
+            const colors = [
+                '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3',
+                '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a',
+                '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722',
+                '#795548', '#607d8b', '#f44336', '#e91e63', '#9c27b0'
+            ];
+            let hash = 0;
+            for (let i = 0; i < userId.length; i++) {
+                hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        function createAvatar(userId, size = 40) {
+            const color = userAvatars[userId] || generateAvatarColor(userId);
+            const initial = userId.charAt(0).toUpperCase();
+            return `<div class="user-avatar" style="width: ${size}px; height: ${size}px; background: ${color}; font-size: ${size * 0.4}px;">${initial}</div>`;
+        }
 
         socket.on('connect', () => {
             console.log('✅ Connected to WebSocket');
@@ -363,7 +386,9 @@
                     body: JSON.stringify({user_id: userId})
                 });
                 if (response.ok) {
+                    const data = await response.json();
                     currentUser = userId; 
+                    userAvatars[userId] = data.avatar_color;
                     updateStatus(true); 
                     loadMyGroups();
                     loadUnreadCounts();
@@ -452,12 +477,15 @@
                     const users = [currentUser, user.user_id].sort();
                     const roomId = `direct_${users[0]}_${users[1]}`;
                     
+                    // Store avatar color
+                    userAvatars[user.user_id] = user.avatar_color;
+                    
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
                     chatItem.setAttribute('data-room-id', roomId);
                     chatItem.onclick = () => beginDirectMessage(user.user_id);
                     chatItem.innerHTML = `
-                        <div class="user-avatar">${user.user_id[0].toUpperCase()}</div>
+                        ${createAvatar(user.user_id)}
                         <div class="chat-info">
                             <div class="chat-name">${user.user_id}</div>
                             <div class="chat-preview">${user.status}</div>
@@ -519,7 +547,9 @@
             document.getElementById('inputArea').style.display = 'block';
             
             document.getElementById('chatTitle').textContent = name;
-            document.getElementById('chatAvatar').textContent = type === 'group' ? '#' : name[0].toUpperCase();
+            document.getElementById('chatAvatar').innerHTML = type === 'group' ? 
+                '<div class="user-avatar" style="background: #00a884;">#</div>' : 
+                createAvatar(name);
             document.getElementById('chatStatus').textContent = type === 'group' ? `Group ID: ${chatId}` : 'Direct Message';
             
             document.getElementById('messages').innerHTML = '';
@@ -649,6 +679,7 @@
             });
             
             messageDiv.innerHTML = `
+                ${!isOwn ? `<div class="message-avatar">${createAvatar(sender, 32)}</div>` : ''}
                 <div class="message-bubble">
                     ${!isOwn && currentChatType === 'group' ? `<div class="message-sender">${sender}</div>` : ''}
                     <div class="message-text">${message}</div>

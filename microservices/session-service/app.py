@@ -1,73 +1,93 @@
 from flask import Flask, request, jsonify
-import redis
+import psycopg2
 import os
-import time
-import json
+from datetime import datetime
+import hashlib
 
 app = Flask(__name__)
-redis_client = redis.Redis.from_url(os.getenv('REDIS_URL', 'redis://localhost:6379'))
+
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://chat:password@postgres:5432/chatapp')
+
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL)
+
+def generate_avatar_color(user_id):
+    """Generate a consistent color based on user_id"""
+    colors = [
+        '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3',
+        '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a',
+        '#cddc39', '#ffeb3b', '#ffc107', '#ff9800', '#ff5722',
+        '#795548', '#607d8b', '#f44336', '#e91e63', '#9c27b0'
+    ]
+    hash_value = int(hashlib.md5(user_id.encode()).hexdigest(), 16)
+    return colors[hash_value % len(colors)]
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'healthy'})
 
 @app.route('/login', methods=['POST'])
 def login():
     data = request.json
     user_id = data['user_id']
     
-    session_data = {
-        'user_id': user_id,
-        'login_time': time.time(),
-        'status': 'online'
-    }
-    
-    redis_client.hset('sessions', user_id, json.dumps(session_data))
-    redis_client.hset('user_status', user_id, 'online')
-    redis_client.hset('last_seen', user_id, time.time())
-    
-    return jsonify({'status': 'logged_in'})
-
-@app.route('/logout', methods=['POST'])
-def logout():
-    data = request.json
-    user_id = data['user_id']
-    
-    redis_client.hdel('sessions', user_id)
-    redis_client.hset('user_status', user_id, 'offline')
-    redis_client.hset('last_seen', user_id, time.time())
-    
-    return jsonify({'status': 'logged_out'})
-
-@app.route('/status/<user_id>')
-def get_status(user_id):
-    status = redis_client.hget('user_status', user_id)
-    last_seen = redis_client.hget('last_seen', user_id)
-    
-    return jsonify({
-        'user_id': user_id,
-        'status': status.decode() if status else 'offline',
-        'last_seen': float(last_seen) if last_seen else None
-    })
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if user exists
+        cur.execute("SELECT user_id, avatar_color FROM users WHERE user_id = %s", (user_id,))
+        user = cur.fetchone()
+        
+        if user:
+            # Update status to online
+            cur.execute(
+                "UPDATE users SET status = 'online', last_seen = CURRENT_TIMESTAMP WHERE user_id = %s",
+                (user_id,)
+            )
+            avatar_color = user[1]
+        else:
+            # Create new user with generated avatar color
+            avatar_color = generate_avatar_color(user_id)
+            cur.execute(
+                "INSERT INTO users (user_id, status, avatar_color) VALUES (%s, 'online', %s)",
+                (user_id, avatar_color)
+            )
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            'status': 'success',
+            'user_id': user_id,
+            'avatar_color': avatar_color
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/users')
 def get_users():
-    users = []
-    for user_id in redis_client.hkeys('user_status'):
-        status = redis_client.hget('user_status', user_id.decode())
-        users.append({
-            'user_id': user_id.decode(),
-            'status': status.decode() if status else 'offline'
-        })
-    return jsonify(users)
-
-@app.route('/update_presence', methods=['POST'])
-def update_presence():
-    data = request.json
-    user_id = data['user_id']
-    
-    redis_client.hset('last_seen', user_id, time.time())
-    return jsonify({'status': 'updated'})
-
-@app.route('/health')
-def health():
-    return {'status': 'healthy'}
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT user_id, status, avatar_color FROM users ORDER BY last_seen DESC")
+        
+        users = []
+        for row in cur.fetchall():
+            users.append({
+                'user_id': row[0],
+                'status': row[1],
+                'avatar_color': row[2] or generate_avatar_color(row[0])
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify(users)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)

@@ -30,11 +30,12 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Users table for session management
+-- Users table for session management with avatar colors
 CREATE TABLE IF NOT EXISTS users (
     user_id VARCHAR(255) PRIMARY KEY,
     status VARCHAR(50) DEFAULT 'offline',
-    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    avatar_color VARCHAR(7) DEFAULT '#00a884'
 );
 
 -- Unread messages table for unread count feature
@@ -57,12 +58,13 @@ CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_unread_messages_user_room ON unread_messages(user_id, room_id);
 CREATE INDEX IF NOT EXISTS idx_unread_messages_message_id ON unread_messages(message_id);
 
--- Insert sample data for testing (optional)
-INSERT INTO users (user_id, status) VALUES 
-    ('alice', 'online'),
-    ('bob', 'offline'),
-    ('charlie', 'online')
-ON CONFLICT (user_id) DO NOTHING;
+-- Insert sample data for testing with avatar colors
+INSERT INTO users (user_id, status, avatar_color) VALUES 
+    ('alice', 'online', '#e91e63'),
+    ('bob', 'offline', '#2196f3'),
+    ('charlie', 'online', '#ff9800')
+ON CONFLICT (user_id) DO UPDATE SET
+    avatar_color = EXCLUDED.avatar_color;
 
 -- Sample group for testing
 INSERT INTO groups (name, creator_id) VALUES 
