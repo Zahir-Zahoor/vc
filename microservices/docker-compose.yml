@@ -1,29 +1,7 @@
 version: '3.8'
 
 services:
-  # Infrastructure
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:latest
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-
-  kafka:
-    image: confluentinc/cp-kafka:latest
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-    depends_on:
-      - zookeeper
-
+  # Database Services
   postgres:
     image: postgres:15-alpine
     environment:
@@ -32,15 +10,67 @@ services:
       POSTGRES_PASSWORD: password
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 
-  # Microservices
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  # Message Queue
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  # Core Services
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "5005:5000"
+    environment:
+      DATABASE_URL: postgresql://chat:password@postgres:5432/chatapp
+      REDIS_HOST: redis
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+    depends_on:
+      - postgres
+      - redis
+
+  user-service:
+    build: ./user-service
+    ports:
+      - "5006:5000"
+    environment:
+      DATABASE_URL: postgresql://chat:password@postgres:5432/chatapp
+      REDIS_HOST: redis
+    depends_on:
+      - postgres
+      - redis
+
   websocket-service:
     build: ./websocket-service
     ports:
       - "5001:5000"
     environment:
-      REDIS_URL: redis://redis:6379
-      KAFKA_URL: kafka:9092
+      MESSAGING_SERVICE_URL: http://messaging-service:5000
+      AUTH_SERVICE_URL: http://auth-service:5000
+      REDIS_HOST: redis
     depends_on:
       - redis
       - kafka
@@ -50,11 +80,9 @@ services:
     ports:
       - "5002:5000"
     environment:
-      REDIS_URL: redis://redis:6379
-      KAFKA_URL: kafka:9092
+      DATABASE_URL: postgresql://chat:password@postgres:5432/chatapp
     depends_on:
-      - redis
-      - kafka
+      - postgres
 
   group-service:
     build: ./group-service
@@ -62,31 +90,38 @@ services:
       - "5003:5000"
     environment:
       DATABASE_URL: postgresql://chat:password@postgres:5432/chatapp
-      REDIS_URL: redis://redis:6379
+      USER_SERVICE_URL: http://user-service:5000
     depends_on:
       - postgres
-      - redis
 
   session-service:
     build: ./session-service
     ports:
       - "5004:5000"
     environment:
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://chat:password@postgres:5432/chatapp
     depends_on:
-      - redis
+      - postgres
 
   api-gateway:
     build: ./api-gateway
     ports:
       - "5000:5000"
     environment:
-      WEBSOCKET_SERVICE_URL: http://websocket-service:5000
-      MESSAGING_SERVICE_URL: http://messaging-service:5000
+      AUTH_SERVICE_URL: http://auth-service:5000
+      USER_SERVICE_URL: http://user-service:5000
       GROUP_SERVICE_URL: http://group-service:5000
       SESSION_SERVICE_URL: http://session-service:5000
+      MESSAGING_SERVICE_URL: http://messaging-service:5000
+      WEBSOCKET_SERVICE_URL: http://websocket-service:5000
     depends_on:
+      - auth-service
+      - user-service
       - websocket-service
       - messaging-service
       - group-service
       - session-service
+
+volumes:
+  postgres_data:
+  redis_data:

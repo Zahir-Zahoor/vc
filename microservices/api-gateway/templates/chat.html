@@ -7,13 +7,87 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: #0a1014; height: 100vh; overflow: hidden; }
+        
+        /* Authentication Screen */
+        .auth-container { 
+            position: fixed; 
+            top: 0; left: 0; right: 0; bottom: 0; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        .auth-box { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 12px; 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            width: 400px; 
+            max-width: 90vw;
+        }
+        .auth-header { text-align: center; margin-bottom: 30px; }
+        .auth-header h1 { color: #333; font-size: 28px; margin-bottom: 8px; }
+        .auth-header p { color: #666; font-size: 14px; }
+        .auth-form { display: flex; flex-direction: column; gap: 20px; }
+        .form-group { display: flex; flex-direction: column; gap: 8px; }
+        .form-group label { color: #333; font-weight: 500; font-size: 14px; }
+        .form-group input { 
+            padding: 12px 16px; 
+            border: 2px solid #e1e5e9; 
+            border-radius: 8px; 
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus { 
+            outline: none; 
+            border-color: #667eea; 
+        }
+        .auth-btn { 
+            padding: 14px; 
+            background: #667eea; 
+            color: white; 
+            border: none; 
+            border-radius: 8px; 
+            font-size: 16px; 
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .auth-btn:hover { background: #5a6fd8; }
+        .auth-btn:disabled { background: #ccc; cursor: not-allowed; }
+        .auth-switch { 
+            text-align: center; 
+            margin-top: 20px; 
+            color: #666; 
+            font-size: 14px;
+        }
+        .auth-switch a { 
+            color: #667eea; 
+            text-decoration: none; 
+            font-weight: 500;
+        }
+        .auth-switch a:hover { text-decoration: underline; }
+        .error-message { 
+            background: #fee; 
+            color: #c33; 
+            padding: 12px; 
+            border-radius: 6px; 
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        
+        /* Main App */
         .app-container { display: flex; height: 100vh; background: #111b21; }
         .sidebar { width: 350px; background: #202c33; border-right: 1px solid #2a3942; display: flex; flex-direction: column; }
         .sidebar-header { background: #2a3942; padding: 20px; color: #e9edef; border-bottom: 1px solid #3b4a54; }
         .sidebar-header h2 { font-size: 20px; margin-bottom: 15px; }
+        .user-info { display: flex; align-items: center; gap: 12px; margin-bottom: 15px; }
+        .user-info .user-avatar { width: 40px; height: 40px; }
+        .user-details h3 { font-size: 16px; margin-bottom: 4px; }
+        .user-details p { font-size: 12px; color: #8696a0; }
         .user-controls { display: flex; gap: 10px; margin-bottom: 15px; }
         .user-controls input { flex: 1; padding: 10px; border: none; border-radius: 8px; background: #3b4a54; color: #e9edef; font-size: 14px; }
         .btn { padding: 10px 15px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; background: #00a884; color: white; }
+        .btn-secondary { background: #3b4a54; }
         .group-controls { display: flex; gap: 10px; margin-bottom: 10px; }
         .group-controls input { flex: 1; padding: 8px 12px; border: none; border-radius: 6px; background: #3b4a54; color: #e9edef; font-size: 13px; }
         .status { background: #1f2937; padding: 12px; border-radius: 8px; color: #e9edef; font-size: 13px; margin-bottom: 15px; }
@@ -30,7 +104,6 @@
         .chat-name { font-weight: 600; margin-bottom: 2px; }
         .chat-preview { font-size: 13px; color: #8696a0; }
         .online-dot { width: 8px; height: 8px; background: #00a884; border-radius: 50%; margin-left: auto; }
-        
         .unread-badge { 
             position: absolute; 
             top: 8px; 
@@ -147,21 +220,80 @@
         .welcome-screen h2 { font-size: 32px; margin-bottom: 20px; color: #e9edef; }
         .welcome-screen p { font-size: 16px; max-width: 400px; line-height: 1.5; }
         .online-indicator { width: 8px; height: 8px; background: #00a884; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
-    <div class="app-container">
+    <!-- Authentication Screen -->
+    <div class="auth-container" id="authContainer">
+        <div class="auth-box">
+            <div class="auth-header">
+                <h1>💬 ChatApp</h1>
+                <p id="authSubtitle">Sign in to start chatting</p>
+            </div>
+            
+            <div id="errorMessage" class="error-message hidden"></div>
+            
+            <!-- Login Form -->
+            <form class="auth-form" id="loginForm">
+                <div class="form-group">
+                    <label for="loginIdentifier">Username or Email</label>
+                    <input type="text" id="loginIdentifier" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" required>
+                </div>
+                <button type="submit" class="auth-btn" id="loginBtn">Sign In</button>
+            </form>
+            
+            <!-- Register Form -->
+            <form class="auth-form hidden" id="registerForm">
+                <div class="form-group">
+                    <label for="registerUsername">Username</label>
+                    <input type="text" id="registerUsername" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerEmail">Email</label>
+                    <input type="email" id="registerEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password</label>
+                    <input type="password" id="registerPassword" required>
+                </div>
+                <button type="submit" class="auth-btn" id="registerBtn">Create Account</button>
+            </form>
+            
+            <div class="auth-switch">
+                <span id="authSwitchText">Don't have an account?</span>
+                <a href="#" id="authSwitchLink">Sign up</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chat Application -->
+    <div class="app-container hidden" id="appContainer">
         <div class="sidebar">
             <div class="sidebar-header">
-                <h2>💬 ChatApp</h2>
+                <div class="user-info" id="userInfo">
+                    <div class="user-avatar" id="currentUserAvatar">U</div>
+                    <div class="user-details">
+                        <h3 id="currentUserName">User</h3>
+                        <p id="currentUserEmail">user@example.com</p>
+                    </div>
+                </div>
+                
                 <div class="user-controls">
-                    <input type="text" id="userId" placeholder="Enter your name">
-                    <button class="btn" onclick="userLogin()">Login</button>
+                    <input type="text" id="searchUsers" placeholder="Search users...">
+                    <button class="btn btn-secondary" onclick="logout()">Logout</button>
                 </div>
+                
                 <div class="status" id="status">
-                    <span class="online-indicator" style="display: none;"></span>
-                    <span id="statusText">Offline - Please login</span>
+                    <span class="online-indicator"></span>
+                    <span id="statusText">Online</span>
                 </div>
+                
                 <div class="group-controls">
                     <input type="text" id="groupName" placeholder="Group name">
                     <button class="btn" onclick="makeGroup()">Create</button>
@@ -171,12 +303,16 @@
                     <button class="btn" onclick="enterGroup()">Join</button>
                 </div>
             </div>
+            
             <div class="chat-tabs">
                 <div class="tab active" id="groupsTab" onclick="changeTab('groups')">Groups</div>
                 <div class="tab" id="directTab" onclick="changeTab('direct')">Direct</div>
+                <div class="tab" id="contactsTab" onclick="changeTab('contacts')">Contacts</div>
             </div>
+            
             <div class="chat-list" id="groupsList"></div>
-            <div class="chat-list" id="directList" style="display: none;"></div>
+            <div class="chat-list hidden" id="directList"></div>
+            <div class="chat-list hidden" id="contactsList"></div>
         </div>
         
         <div class="chat-area">
@@ -185,7 +321,7 @@
                 <p>Connect with your team through secure, real-time messaging. Create or join a group, or start a direct conversation.</p>
             </div>
             
-            <div class="chat-header" id="chatHeader" style="display: none;">
+            <div class="chat-header hidden" id="chatHeader">
                 <div class="user-avatar" id="chatAvatar">#</div>
                 <div>
                     <h3 id="chatTitle">Chat Name</h3>
@@ -193,7 +329,7 @@
                 </div>
             </div>
             
-            <div class="messages-container" id="messages" style="display: none;"></div>
+            <div class="messages-container hidden" id="messages"></div>
             
             <div class="typing-indicator" id="typingIndicator">
                 <span id="typingText">Someone is typing</span>
@@ -204,7 +340,7 @@
                 </div>
             </div>
             
-            <div class="input-area" id="inputArea" style="display: none;">
+            <div class="input-area hidden" id="inputArea">
                 <div class="input-container">
                     <textarea class="message-input" id="messageInput" placeholder="Type a message"></textarea>
                     <button class="send-btn" onclick="sendChatMessage()">➤</button>
@@ -214,8 +350,11 @@
     </div>
 
     <script>
-        const socket = io('http://localhost:5001', { transports: ['websocket', 'polling'] });
+        // Global variables
+        let socket = null;
         let currentUser = null;
+        let currentUserData = null;
+        let authToken = null;
         let currentRoom = null;
         let currentChatName = null;
         let currentChatType = null;
@@ -223,8 +362,268 @@
         let typingUsers = new Set();
         let typingTimeout = null;
         let unreadCounts = {};
-        let userAvatars = {}; // Store user avatar colors
+        let userAvatars = {};
+        let isLoginMode = true;
 
+        // Authentication functions
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').classList.add('hidden');
+        }
+
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            const subtitle = document.getElementById('authSubtitle');
+            const switchText = document.getElementById('authSwitchText');
+            const switchLink = document.getElementById('authSwitchLink');
+
+            if (isLoginMode) {
+                loginForm.classList.remove('hidden');
+                registerForm.classList.add('hidden');
+                subtitle.textContent = 'Sign in to start chatting';
+                switchText.textContent = "Don't have an account?";
+                switchLink.textContent = 'Sign up';
+            } else {
+                loginForm.classList.add('hidden');
+                registerForm.classList.remove('hidden');
+                subtitle.textContent = 'Create your account';
+                switchText.textContent = 'Already have an account?';
+                switchLink.textContent = 'Sign in';
+            }
+            hideError();
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const identifier = document.getElementById('loginIdentifier').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const loginBtn = document.getElementById('loginBtn');
+
+            if (!identifier || !password) {
+                showError('Please fill in all fields');
+                return;
+            }
+
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Signing in...';
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        identifier: identifier,
+                        password: password,
+                        device_info: navigator.userAgent
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    authToken = data.token;
+                    currentUserData = data.user;
+                    currentUser = data.user.user_id;
+                    userAvatars[currentUser] = data.user.avatar_color;
+                    
+                    localStorage.setItem('authToken', authToken);
+                    localStorage.setItem('userData', JSON.stringify(currentUserData));
+                    
+                    showMainApp();
+                } else {
+                    showError(data.error || 'Login failed');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Sign In';
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const username = document.getElementById('registerUsername').value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
+            const password = document.getElementById('registerPassword').value;
+            const registerBtn = document.getElementById('registerBtn');
+
+            if (!username || !email || !password) {
+                showError('Please fill in all fields');
+                return;
+            }
+
+            if (password.length < 6) {
+                showError('Password must be at least 6 characters');
+                return;
+            }
+
+            registerBtn.disabled = true;
+            registerBtn.textContent = 'Creating account...';
+
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        user_id: username,
+                        email: email,
+                        password: password
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Auto-login after successful registration
+                    document.getElementById('loginIdentifier').value = username;
+                    document.getElementById('loginPassword').value = password;
+                    toggleAuthMode();
+                    handleLogin(e);
+                } else {
+                    showError(data.error || 'Registration failed');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            } finally {
+                registerBtn.disabled = false;
+                registerBtn.textContent = 'Create Account';
+            }
+        }
+
+        function showMainApp() {
+            document.getElementById('authContainer').classList.add('hidden');
+            document.getElementById('appContainer').classList.remove('hidden');
+            
+            // Update user info
+            document.getElementById('currentUserName').textContent = currentUserData.user_id;
+            document.getElementById('currentUserEmail').textContent = currentUserData.email;
+            document.getElementById('currentUserAvatar').innerHTML = createAvatar(currentUserData.user_id);
+            
+            // Initialize WebSocket and load data
+            initializeSocket();
+            loadMyGroups();
+            loadUnreadCounts();
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/logout', {
+                    method: 'POST',
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+
+            // Clear local storage and reset state
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('userData');
+            authToken = null;
+            currentUser = null;
+            currentUserData = null;
+            
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+
+            // Show auth screen
+            document.getElementById('appContainer').classList.add('hidden');
+            document.getElementById('authContainer').classList.remove('hidden');
+            
+            // Reset forms
+            document.getElementById('loginForm').reset();
+            document.getElementById('registerForm').reset();
+            hideError();
+        }
+
+        // Check for existing auth token on page load
+        function checkExistingAuth() {
+            const token = localStorage.getItem('authToken');
+            const userData = localStorage.getItem('userData');
+            
+            if (token && userData) {
+                authToken = token;
+                currentUserData = JSON.parse(userData);
+                currentUser = currentUserData.user_id;
+                userAvatars[currentUser] = currentUserData.avatar_color;
+                showMainApp();
+            }
+        }
+
+        // Initialize WebSocket connection
+        function initializeSocket() {
+            socket = io('http://localhost:5001', { 
+                transports: ['websocket', 'polling'],
+                auth: { token: authToken }
+            });
+
+            socket.on('connect', () => {
+                console.log('✅ Connected to WebSocket');
+                updateStatus(true);
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('❌ Disconnected from WebSocket');
+                updateStatus(false);
+            });
+            
+            socket.on('receive_message', (data) => {
+                console.log('📨 Message received:', data);
+                if (data.room_id == currentRoom && data.user_id !== currentUser) {
+                    displayMessage(data.user_id, data.message, false, new Date(data.timestamp), data.delivery_status);
+                    
+                    setTimeout(() => {
+                        socket.emit('message_read', {
+                            room_id: currentRoom,
+                            timestamp: data.timestamp,
+                            user_id: currentUser
+                        });
+                    }, 1000);
+                } else if (data.room_id != currentRoom) {
+                    loadUnreadCounts();
+                }
+            });
+
+            socket.on('message_delivered', (data) => {
+                console.log('✅ Message delivered:', data);
+                updateMessageStatus(data.timestamp, 'delivered');
+            });
+
+            socket.on('message_status_update', (data) => {
+                console.log('📖 Message status update:', data);
+                updateMessageStatus(data.timestamp, data.status);
+            });
+
+            socket.on('user_typing', (data) => {
+                if (data.room_id == currentRoom && data.user_id !== currentUser) {
+                    if (data.typing) {
+                        typingUsers.add(data.user_id);
+                    } else {
+                        typingUsers.delete(data.user_id);
+                    }
+                    refreshTypingIndicator();
+                }
+            });
+        }
+
+        // Event listeners
+        document.getElementById('loginForm').addEventListener('submit', handleLogin);
+        document.getElementById('registerForm').addEventListener('submit', handleRegister);
+        document.getElementById('authSwitchLink').addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleAuthMode();
+        });
+
+        // Utility functions
         function generateAvatarColor(userId) {
             const colors = [
                 '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3',
@@ -245,55 +644,29 @@
             return `<div class="user-avatar" style="width: ${size}px; height: ${size}px; background: ${color}; font-size: ${size * 0.4}px;">${initial}</div>`;
         }
 
-        socket.on('connect', () => {
-            console.log('✅ Connected to WebSocket');
-            updateStatus(true);
-        });
-        
-        socket.on('disconnect', () => {
-            console.log('❌ Disconnected from WebSocket');
-            updateStatus(false);
-        });
-        
-        socket.on('receive_message', (data) => {
-            console.log('📨 Message received:', data);
-            if (data.room_id == currentRoom && data.user_id !== currentUser) {
-                displayMessage(data.user_id, data.message, false, new Date(data.timestamp), data.delivery_status);
-                
-                // Mark message as read after 1 second
-                setTimeout(() => {
-                    socket.emit('message_read', {
-                        room_id: currentRoom,
-                        timestamp: data.timestamp,
-                        user_id: currentUser
-                    });
-                }, 1000);
-            } else if (data.room_id != currentRoom) {
-                // Update unread count for other rooms
-                loadUnreadCounts();
+        function formatTimestamp(timestamp) {
+            const now = new Date();
+            const messageTime = new Date(timestamp);
+            const diffMs = now - messageTime;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            const diffDays = Math.floor(diffMs / 86400000);
+            
+            if (diffMins < 1) return 'now';
+            if (diffMins < 60) return `${diffMins}m ago`;
+            if (diffHours < 24) return `${diffHours}h ago`;
+            if (diffDays < 7) {
+                if (diffDays === 1) return 'Yesterday';
+                return `${diffDays}d ago`;
             }
-        });
-
-        socket.on('message_delivered', (data) => {
-            console.log('✅ Message delivered:', data);
-            updateMessageStatus(data.timestamp, 'delivered');
-        });
-
-        socket.on('message_status_update', (data) => {
-            console.log('📖 Message status update:', data);
-            updateMessageStatus(data.timestamp, data.status);
-        });
-
-        socket.on('user_typing', (data) => {
-            if (data.room_id == currentRoom && data.user_id !== currentUser) {
-                if (data.typing) {
-                    typingUsers.add(data.user_id);
-                } else {
-                    typingUsers.delete(data.user_id);
-                }
-                refreshTypingIndicator();
+            
+            const isThisYear = messageTime.getFullYear() === now.getFullYear();
+            if (isThisYear) {
+                return messageTime.toLocaleDateString([], {month: 'short', day: 'numeric'});
+            } else {
+                return messageTime.toLocaleDateString([], {month: 'short', day: 'numeric', year: 'numeric'});
             }
-        });
+        }
 
         function updateMessageStatus(timestamp, status) {
             const messageElement = document.querySelector(`[data-timestamp="${timestamp}"]`);
@@ -332,11 +705,11 @@
             const statusText = document.getElementById('statusText');
             if (connected && currentUser) {
                 indicator.style.display = 'inline-block';
-                statusText.textContent = `Online as ${currentUser}`;
+                statusText.textContent = 'Online';
                 document.getElementById('status').classList.add('online');
             } else {
                 indicator.style.display = 'none';
-                statusText.textContent = currentUser ? 'Connecting...' : 'Offline - Please login';
+                statusText.textContent = 'Connecting...';
                 document.getElementById('status').classList.remove('online');
             }
         }
@@ -345,15 +718,22 @@
             activeTab = tab;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.getElementById(tab + 'Tab').classList.add('active');
-            document.getElementById('groupsList').style.display = tab === 'groups' ? 'block' : 'none';
-            document.getElementById('directList').style.display = tab === 'direct' ? 'block' : 'none';
-            if (tab === 'direct') loadAllUsers(); else loadMyGroups();
+            
+            document.getElementById('groupsList').classList.toggle('hidden', tab !== 'groups');
+            document.getElementById('directList').classList.toggle('hidden', tab !== 'direct');
+            document.getElementById('contactsList').classList.toggle('hidden', tab !== 'contacts');
+            
+            if (tab === 'direct') loadAllUsers();
+            else if (tab === 'groups') loadMyGroups();
+            else if (tab === 'contacts') loadContacts();
         }
 
         async function loadUnreadCounts() {
-            if (!currentUser) return;
+            if (!currentUser || !authToken) return;
             try {
-                const response = await fetch(`/api/unread_counts/${currentUser}`);
+                const response = await fetch(`/api/unread_counts/${currentUser}`, {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
                 const data = await response.json();
                 if (!data.error) {
                     unreadCounts = data;
@@ -377,58 +757,58 @@
             });
         }
 
-        async function userLogin() {
-            const userId = document.getElementById('userId').value.trim();
-            if (!userId) { alert('Please enter your name'); return; }
-            try {
-                const response = await fetch('/api/login', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({user_id: userId})
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    currentUser = userId; 
-                    userAvatars[userId] = data.avatar_color;
-                    updateStatus(true); 
-                    loadMyGroups();
-                    loadUnreadCounts();
-                    document.getElementById('userId').value = '';
-                }
-            } catch (error) { console.error('Login failed:', error); }
-        }
-
         async function makeGroup() {
             const groupName = document.getElementById('groupName').value.trim();
-            if (!groupName || !currentUser) { alert('Please login and enter a group name'); return; }
+            if (!groupName || !currentUser) { 
+                alert('Please enter a group name'); 
+                return; 
+            }
             try {
                 const response = await fetch('/api/create_group', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
                     body: JSON.stringify({name: groupName, creator_id: currentUser})
                 });
                 const data = await response.json();
                 alert(`Group "${groupName}" created! ID: ${data.group_id}`);
                 document.getElementById('groupName').value = ''; 
                 loadMyGroups();
-            } catch (error) { console.error('Create group failed:', error); }
+            } catch (error) { 
+                console.error('Create group failed:', error); 
+            }
         }
 
         async function enterGroup() {
             const groupId = document.getElementById('joinGroupId').value.trim();
-            if (!groupId || !currentUser) { alert('Please login and enter a group ID'); return; }
+            if (!groupId || !currentUser) { 
+                alert('Please enter a group ID'); 
+                return; 
+            }
             try {
                 await fetch('/api/join_group', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
                     body: JSON.stringify({group_id: parseInt(groupId), user_id: currentUser})
                 });
                 document.getElementById('joinGroupId').value = ''; 
                 loadMyGroups();
-            } catch (error) { console.error('Join group failed:', error); }
+            } catch (error) { 
+                console.error('Join group failed:', error); 
+            }
         }
 
         async function loadMyGroups() {
-            if (!currentUser) return;
+            if (!currentUser || !authToken) return;
             try {
-                const response = await fetch(`/api/groups/${currentUser}`);
+                const response = await fetch(`/api/groups/${currentUser}`, {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
                 const data = await response.json();
                 
                 if (data.error || !Array.isArray(data)) {
@@ -444,7 +824,7 @@
                     chatItem.setAttribute('data-room-id', group.id);
                     chatItem.onclick = () => startChatRoom(group.id, 'group', group.name);
                     chatItem.innerHTML = `
-                        <div class="user-avatar">#</div>
+                        <div class="user-avatar" style="background: #00a884;">#</div>
                         <div class="chat-info">
                             <div class="chat-name">${group.name}</div>
                             <div class="chat-preview">Group ID: ${group.id}</div>
@@ -461,9 +841,11 @@
         }
 
         async function loadAllUsers() {
-            if (!currentUser) return;
+            if (!currentUser || !authToken) return;
             try {
-                const response = await fetch('/api/users');
+                const response = await fetch('/api/users', {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
                 const data = await response.json();
                 
                 if (data.error || !Array.isArray(data)) {
@@ -477,7 +859,6 @@
                     const users = [currentUser, user.user_id].sort();
                     const roomId = `direct_${users[0]}_${users[1]}`;
                     
-                    // Store avatar color
                     userAvatars[user.user_id] = user.avatar_color;
                     
                     const chatItem = document.createElement('div');
@@ -502,15 +883,64 @@
             }
         }
 
+        async function loadContacts() {
+            if (!currentUser || !authToken) return;
+            try {
+                const response = await fetch('/api/contacts', {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
+                const data = await response.json();
+                
+                if (data.error || !Array.isArray(data)) {
+                    document.getElementById('contactsList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">No contacts found</div>';
+                    return;
+                }
+                
+                const contactsList = document.getElementById('contactsList');
+                contactsList.innerHTML = '';
+                data.forEach(contact => {
+                    const users = [currentUser, contact.user_id].sort();
+                    const roomId = `direct_${users[0]}_${users[1]}`;
+                    
+                    userAvatars[contact.user_id] = contact.avatar_color;
+                    
+                    const chatItem = document.createElement('div');
+                    chatItem.className = 'chat-item';
+                    chatItem.setAttribute('data-room-id', roomId);
+                    chatItem.onclick = () => beginDirectMessage(contact.user_id);
+                    chatItem.innerHTML = `
+                        ${createAvatar(contact.user_id)}
+                        <div class="chat-info">
+                            <div class="chat-name">${contact.user_id}</div>
+                            <div class="chat-preview">${contact.status}</div>
+                        </div>
+                        ${contact.status === 'online' ? '<div class="online-dot"></div>' : ''}
+                        <div class="unread-badge">0</div>
+                    `;
+                    contactsList.appendChild(chatItem);
+                });
+                updateUnreadBadges();
+            } catch (error) { 
+                console.error('Load contacts failed:', error);
+                document.getElementById('contactsList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">Failed to load contacts</div>';
+            }
+        }
+
         async function beginDirectMessage(otherUser) {
             try {
                 const response = await fetch('/api/direct_chat', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    method: 'POST', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
                     body: JSON.stringify({user1: currentUser, user2: otherUser})
                 });
                 const data = await response.json();
                 startChatRoom(data.room_id, 'direct', otherUser);
-            } catch (error) { console.error('Start direct chat failed:', error); }
+            } catch (error) { 
+                console.error('Start direct chat failed:', error); 
+            }
         }
 
         async function startChatRoom(chatId, type, name) {
@@ -519,22 +949,19 @@
             typingUsers.clear(); refreshTypingIndicator();
             
             // Mark room as read
-            if (currentUser && chatId) {
+            if (currentUser && chatId && authToken) {
                 try {
-                    console.log('Marking room as read:', {user_id: currentUser, room_id: chatId});
                     const response = await fetch('/api/mark_read', {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
                         body: JSON.stringify({user_id: currentUser, room_id: String(chatId)})
                     });
                     
-                    if (!response.ok) {
-                        console.error('Mark read failed with status:', response.status);
-                        const errorText = await response.text();
-                        console.error('Error response:', errorText);
-                    } else {
-                        console.log('Successfully marked room as read');
-                        loadUnreadCounts(); // Refresh unread counts
+                    if (response.ok) {
+                        loadUnreadCounts();
                     }
                 } catch (error) {
                     console.error('Failed to mark as read:', error);
@@ -542,9 +969,9 @@
             }
             
             document.getElementById('welcomeScreen').style.display = 'none';
-            document.getElementById('chatHeader').style.display = 'flex';
-            document.getElementById('messages').style.display = 'block';
-            document.getElementById('inputArea').style.display = 'block';
+            document.getElementById('chatHeader').classList.remove('hidden');
+            document.getElementById('messages').classList.remove('hidden');
+            document.getElementById('inputArea').classList.remove('hidden');
             
             document.getElementById('chatTitle').textContent = name;
             document.getElementById('chatAvatar').innerHTML = type === 'group' ? 
@@ -555,13 +982,17 @@
             document.getElementById('messages').innerHTML = '';
             await loadChatHistory(chatId);
             
-            socket.emit('join_room', {room_id: chatId, user_id: currentUser});
+            if (socket) {
+                socket.emit('join_room', {room_id: chatId, user_id: currentUser});
+            }
             document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
         }
 
         async function loadChatHistory(roomId) {
             try {
-                const response = await fetch(`/api/messages/${roomId}`);
+                const response = await fetch(`/api/messages/${roomId}`, {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
                 const data = await response.json();
                 
                 if (data.error || !Array.isArray(data)) {
@@ -586,9 +1017,9 @@
 
         function showWelcome() {
             document.getElementById('welcomeScreen').style.display = 'flex';
-            document.getElementById('chatHeader').style.display = 'none';
-            document.getElementById('messages').style.display = 'none';
-            document.getElementById('inputArea').style.display = 'none';
+            document.getElementById('chatHeader').classList.add('hidden');
+            document.getElementById('messages').classList.add('hidden');
+            document.getElementById('inputArea').classList.add('hidden');
             document.getElementById('typingIndicator').style.display = 'none';
             currentRoom = null; typingUsers.clear();
         }
@@ -596,9 +1027,11 @@
         async function sendChatMessage() {
             const messageInput = document.getElementById('messageInput');
             const message = messageInput.value.trim();
-            if (!message || !currentUser || !currentRoom) return;
+            if (!message || !currentUser || !currentRoom || !authToken) return;
             
-            socket.emit('typing_stop', {room_id: currentRoom, user_id: currentUser});
+            if (socket) {
+                socket.emit('typing_stop', {room_id: currentRoom, user_id: currentUser});
+            }
             
             const timestamp = Date.now();
             
@@ -607,7 +1040,10 @@
             try {
                 const response = await fetch('/api/messages', {
                     method: 'POST', 
-                    headers: {'Content-Type': 'application/json'},
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
                     body: JSON.stringify({
                         room_id: currentRoom, 
                         user_id: currentUser, 
@@ -624,46 +1060,16 @@
                 console.error('Failed to store message:', error); 
             }
             
-            socket.emit('send_message', {
-                room_id: currentRoom, 
-                user_id: currentUser, 
-                message: message, 
-                timestamp: timestamp
-            });
+            if (socket) {
+                socket.emit('send_message', {
+                    room_id: currentRoom, 
+                    user_id: currentUser, 
+                    message: message, 
+                    timestamp: timestamp
+                });
+            }
             
             messageInput.value = '';
-        }
-
-        function formatTimestamp(timestamp) {
-            const now = new Date();
-            const messageTime = new Date(timestamp);
-            const diffMs = now - messageTime;
-            const diffMins = Math.floor(diffMs / 60000);
-            const diffHours = Math.floor(diffMs / 3600000);
-            const diffDays = Math.floor(diffMs / 86400000);
-            
-            // Less than 1 minute
-            if (diffMins < 1) return 'now';
-            
-            // Less than 1 hour
-            if (diffMins < 60) return `${diffMins}m ago`;
-            
-            // Less than 24 hours
-            if (diffHours < 24) return `${diffHours}h ago`;
-            
-            // Less than 7 days
-            if (diffDays < 7) {
-                if (diffDays === 1) return 'Yesterday';
-                return `${diffDays}d ago`;
-            }
-            
-            // More than 7 days - show date
-            const isThisYear = messageTime.getFullYear() === now.getFullYear();
-            if (isThisYear) {
-                return messageTime.toLocaleDateString([], {month: 'short', day: 'numeric'});
-            } else {
-                return messageTime.toLocaleDateString([], {month: 'short', day: 'numeric', year: 'numeric'});
-            }
         }
 
         function displayMessage(sender, message, isOwn, timestamp = new Date(), deliveryStatus = 'sent') {
@@ -693,34 +1099,33 @@
             scrollMessagesToBottom();
         }
 
-        document.getElementById('messageInput').addEventListener('input', function() {
-            if (currentRoom && currentUser) {
-                socket.emit('typing_start', {room_id: currentRoom, user_id: currentUser});
-                if (typingTimeout) clearTimeout(typingTimeout);
-                typingTimeout = setTimeout(() => {
+        // Message input event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            const messageInput = document.getElementById('messageInput');
+            
+            messageInput.addEventListener('input', function() {
+                if (currentRoom && currentUser && socket) {
+                    socket.emit('typing_start', {room_id: currentRoom, user_id: currentUser});
+                    if (typingTimeout) clearTimeout(typingTimeout);
+                    typingTimeout = setTimeout(() => {
+                        socket.emit('typing_stop', {room_id: currentRoom, user_id: currentUser});
+                    }, 3000);
+                }
+            });
+
+            messageInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault(); 
+                    sendChatMessage();
+                }
+            });
+
+            messageInput.addEventListener('blur', function() {
+                if (currentRoom && currentUser && socket) {
                     socket.emit('typing_stop', {room_id: currentRoom, user_id: currentUser});
-                }, 3000);
-            }
+                }
+            });
         });
-
-        document.getElementById('messageInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault(); sendChatMessage();
-            }
-        });
-
-        document.getElementById('messageInput').addEventListener('blur', function() {
-            if (currentRoom && currentUser) {
-                socket.emit('typing_stop', {room_id: currentRoom, user_id: currentUser});
-            }
-        });
-
-        // Load unread counts periodically
-        setInterval(() => {
-            if (currentUser) {
-                loadUnreadCounts();
-            }
-        }, 10000); // Every 10 seconds
 
         // Refresh timestamps every minute
         setInterval(() => {
@@ -731,9 +1136,14 @@
                     timeSpan.textContent = formatTimestamp(new Date(timestamp));
                 }
             });
-        }, 60000); // Update every minute
+        }, 60000);
 
-        showWelcome();
+        // Load unread counts periodically
+        setInterval(() => {
+            if (currentUser && authToken) {
+                loadUnreadCounts();
+            }
+        }, 10000);
     </script>
 </body>
 </html>
