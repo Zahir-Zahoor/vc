@@ -13,7 +13,7 @@ SESSION_SERVICE_URL = os.getenv('SESSION_SERVICE_URL', 'http://session-service:5
 MESSAGING_SERVICE_URL = os.getenv('MESSAGING_SERVICE_URL', 'http://messaging-service:5000')
 WEBSOCKET_SERVICE_URL = os.getenv('WEBSOCKET_SERVICE_URL', 'http://websocket-service:5000')
 
-JWT_SECRET = os.getenv('JWT_SECRET', 'your-super-secret-jwt-key')
+JWT_SECRET = os.getenv('JWT_SECRET', 'your-super-secret-jwt-key-change-in-production')
 
 def get_user_from_token(token):
     """Extract user info from JWT token"""
@@ -87,8 +87,12 @@ def verify_token():
 @app.route('/api/search_users')
 def search_users():
     try:
-        user_id, _ = get_user_from_token(request.headers.get('Authorization', ''))
-        headers = {'X-User-ID': user_id} if user_id else {}
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        user_id, _ = get_user_from_token(token)
+        if not user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+            
+        headers = {'X-User-ID': user_id}
         response = requests.get(f'{USER_SERVICE_URL}/search_users', 
                               params=request.args, headers=headers)
         return jsonify(response.json()), response.status_code
@@ -98,8 +102,12 @@ def search_users():
 @app.route('/api/invite_user', methods=['POST'])
 def invite_user():
     try:
-        user_id, _ = get_user_from_token(request.headers.get('Authorization', ''))
-        headers = {'X-User-ID': user_id} if user_id else {}
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        user_id, _ = get_user_from_token(token)
+        if not user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+            
+        headers = {'X-User-ID': user_id}
         response = requests.post(f'{USER_SERVICE_URL}/invite_user', 
                                json=request.json, headers=headers)
         return jsonify(response.json()), response.status_code
@@ -109,8 +117,12 @@ def invite_user():
 @app.route('/api/accept_invite', methods=['POST'])
 def accept_invite():
     try:
-        user_id, _ = get_user_from_token(request.headers.get('Authorization', ''))
-        headers = {'X-User-ID': user_id} if user_id else {}
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        user_id, _ = get_user_from_token(token)
+        if not user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+            
+        headers = {'X-User-ID': user_id}
         response = requests.post(f'{USER_SERVICE_URL}/accept_invite', 
                                json=request.json, headers=headers)
         return jsonify(response.json()), response.status_code
@@ -120,8 +132,12 @@ def accept_invite():
 @app.route('/api/contacts')
 def get_contacts():
     try:
-        user_id, _ = get_user_from_token(request.headers.get('Authorization', ''))
-        headers = {'X-User-ID': user_id} if user_id else {}
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        user_id, _ = get_user_from_token(token)
+        if not user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+            
+        headers = {'X-User-ID': user_id}
         response = requests.get(f'{USER_SERVICE_URL}/contacts', headers=headers)
         return jsonify(response.json()), response.status_code
     except Exception as e:
@@ -130,8 +146,12 @@ def get_contacts():
 @app.route('/api/invites')
 def get_invites():
     try:
-        user_id, _ = get_user_from_token(request.headers.get('Authorization', ''))
-        headers = {'X-User-ID': user_id} if user_id else {}
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        user_id, _ = get_user_from_token(token)
+        if not user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+            
+        headers = {'X-User-ID': user_id}
         response = requests.get(f'{USER_SERVICE_URL}/invites', 
                               params=request.args, headers=headers)
         return jsonify(response.json()), response.status_code

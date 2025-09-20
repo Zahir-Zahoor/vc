@@ -221,6 +221,127 @@
         .welcome-screen p { font-size: 16px; max-width: 400px; line-height: 1.5; }
         .online-indicator { width: 8px; height: 8px; background: #00a884; border-radius: 50%; display: inline-block; margin-right: 8px; }
         
+        /* Invite Management Styles */
+        .invite-controls { padding: 15px 0; border-bottom: 1px solid #3b4a54; }
+        .invite-tabs { display: flex; gap: 5px; }
+        .invite-tab { 
+            flex: 1; 
+            padding: 8px 12px; 
+            border: none; 
+            background: #3b4a54; 
+            color: #8696a0; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+        .invite-tab.active { background: #00a884; color: white; }
+        .invite-tab:hover:not(.active) { background: #4a5a64; }
+        
+        .invite-item { 
+            background: #2a3942; 
+            padding: 15px; 
+            margin-bottom: 8px; 
+            border-radius: 8px; 
+            color: #e9edef;
+        }
+        .invite-header { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+        .invite-info { flex: 1; }
+        .invite-from { font-weight: 600; font-size: 14px; }
+        .invite-type { font-size: 12px; color: #8696a0; }
+        .invite-message { 
+            background: #1a2329; 
+            padding: 10px; 
+            border-radius: 6px; 
+            font-size: 13px; 
+            color: #d1d7db; 
+            margin-bottom: 10px;
+            font-style: italic;
+        }
+        .invite-actions { display: flex; gap: 8px; }
+        .invite-btn { 
+            padding: 6px 12px; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 12px; 
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        .invite-btn.accept { background: #00a884; color: white; }
+        .invite-btn.accept:hover { background: #008f73; }
+        .invite-btn.reject { background: #f44336; color: white; }
+        .invite-btn.reject:hover { background: #d32f2f; }
+        .invite-btn.cancel { background: #ff9800; color: white; }
+        .invite-btn.cancel:hover { background: #f57c00; }
+        .invite-status { 
+            padding: 4px 8px; 
+            border-radius: 4px; 
+            font-size: 11px; 
+            font-weight: 600; 
+            text-transform: uppercase;
+        }
+        .invite-status.pending { background: #ff9800; color: white; }
+        .invite-status.accepted { background: #4caf50; color: white; }
+        .invite-status.rejected { background: #f44336; color: white; }
+        .invite-time { font-size: 11px; color: #8696a0; margin-top: 5px; }
+        
+        /* Search Modal Styles */
+        .search-modal { 
+            position: fixed; 
+            top: 0; left: 0; right: 0; bottom: 0; 
+            background: rgba(0,0,0,0.7); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            z-index: 2000;
+        }
+        .search-modal-content { 
+            background: #202c33; 
+            padding: 30px; 
+            border-radius: 12px; 
+            width: 500px; 
+            max-width: 90vw; 
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .search-modal h3 { color: #e9edef; margin-bottom: 20px; text-align: center; }
+        .search-input { 
+            width: 100%; 
+            padding: 12px 16px; 
+            border: 2px solid #3b4a54; 
+            border-radius: 8px; 
+            background: #2a3942; 
+            color: #e9edef; 
+            font-size: 16px; 
+            margin-bottom: 20px;
+        }
+        .search-input:focus { outline: none; border-color: #00a884; }
+        .search-results { max-height: 300px; overflow-y: auto; }
+        .search-result { 
+            display: flex; 
+            align-items: center; 
+            gap: 12px; 
+            padding: 12px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            transition: background 0.3s;
+        }
+        .search-result:hover { background: #3b4a54; }
+        .search-result-info { flex: 1; }
+        .search-result-name { font-weight: 600; color: #e9edef; }
+        .search-result-email { font-size: 12px; color: #8696a0; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+        .modal-btn { 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-weight: 500;
+        }
+        .modal-btn.primary { background: #00a884; color: white; }
+        .modal-btn.secondary { background: #3b4a54; color: #e9edef; }
+        
         .hidden { display: none !important; }
     </style>
 </head>
@@ -285,7 +406,7 @@
                 </div>
                 
                 <div class="user-controls">
-                    <input type="text" id="searchUsers" placeholder="Search users...">
+                    <button class="btn" onclick="openSearchModal()">Find Users</button>
                     <button class="btn btn-secondary" onclick="logout()">Logout</button>
                 </div>
                 
@@ -308,11 +429,22 @@
                 <div class="tab active" id="groupsTab" onclick="changeTab('groups')">Groups</div>
                 <div class="tab" id="directTab" onclick="changeTab('direct')">Direct</div>
                 <div class="tab" id="contactsTab" onclick="changeTab('contacts')">Contacts</div>
+                <div class="tab" id="invitesTab" onclick="changeTab('invites')">Invites</div>
             </div>
             
             <div class="chat-list" id="groupsList"></div>
             <div class="chat-list hidden" id="directList"></div>
             <div class="chat-list hidden" id="contactsList"></div>
+            <div class="chat-list hidden" id="invitesList">
+                <div class="invite-controls">
+                    <div class="invite-tabs">
+                        <button class="invite-tab active" onclick="switchInviteTab('received')">Received</button>
+                        <button class="invite-tab" onclick="switchInviteTab('sent')">Sent</button>
+                    </div>
+                </div>
+                <div id="receivedInvites"></div>
+                <div id="sentInvites" class="hidden"></div>
+            </div>
         </div>
         
         <div class="chat-area">
@@ -345,6 +477,31 @@
                     <textarea class="message-input" id="messageInput" placeholder="Type a message"></textarea>
                     <button class="send-btn" onclick="sendChatMessage()">➤</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Modal -->
+    <div class="search-modal hidden" id="searchModal">
+        <div class="search-modal-content">
+            <h3>🔍 Find Users to Chat</h3>
+            <input type="text" class="search-input" id="searchInput" placeholder="Search by username or email...">
+            <div class="search-results" id="searchResults"></div>
+            <div class="modal-actions">
+                <button class="modal-btn secondary" onclick="closeSearchModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invite Modal -->
+    <div class="search-modal hidden" id="inviteModal">
+        <div class="search-modal-content">
+            <h3>💬 Send Chat Invite</h3>
+            <div id="inviteUserInfo" class="invite-header"></div>
+            <textarea id="inviteMessage" class="search-input" placeholder="Add a message (optional)" rows="3"></textarea>
+            <div class="modal-actions">
+                <button class="modal-btn secondary" onclick="closeInviteModal()">Cancel</button>
+                <button class="modal-btn primary" onclick="sendInvite()">Send Invite</button>
             </div>
         </div>
     </div>
@@ -714,6 +871,9 @@
             }
         }
 
+        let activeInviteTab = 'received';
+        let selectedUserForInvite = null;
+
         function changeTab(tab) {
             activeTab = tab;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -722,10 +882,227 @@
             document.getElementById('groupsList').classList.toggle('hidden', tab !== 'groups');
             document.getElementById('directList').classList.toggle('hidden', tab !== 'direct');
             document.getElementById('contactsList').classList.toggle('hidden', tab !== 'contacts');
+            document.getElementById('invitesList').classList.toggle('hidden', tab !== 'invites');
             
             if (tab === 'direct') loadAllUsers();
             else if (tab === 'groups') loadMyGroups();
             else if (tab === 'contacts') loadContacts();
+            else if (tab === 'invites') loadInvites();
+        }
+
+        function switchInviteTab(tab) {
+            activeInviteTab = tab;
+            document.querySelectorAll('.invite-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.invite-tab:nth-child(${tab === 'received' ? '1' : '2'})`).classList.add('active');
+            
+            document.getElementById('receivedInvites').classList.toggle('hidden', tab !== 'received');
+            document.getElementById('sentInvites').classList.toggle('hidden', tab !== 'sent');
+            
+            loadInvites();
+        }
+
+        // Search Modal Functions
+        function openSearchModal() {
+            document.getElementById('searchModal').classList.remove('hidden');
+            document.getElementById('searchInput').focus();
+        }
+
+        function closeSearchModal() {
+            document.getElementById('searchModal').classList.add('hidden');
+            document.getElementById('searchInput').value = '';
+            document.getElementById('searchResults').innerHTML = '';
+        }
+
+        function openInviteModal(user) {
+            selectedUserForInvite = user;
+            document.getElementById('inviteUserInfo').innerHTML = `
+                ${createAvatar(user.user_id)}
+                <div class="invite-info">
+                    <div class="invite-from">${user.user_id}</div>
+                    <div class="invite-type">${user.email}</div>
+                </div>
+            `;
+            document.getElementById('searchModal').classList.add('hidden');
+            document.getElementById('inviteModal').classList.remove('hidden');
+            document.getElementById('inviteMessage').focus();
+        }
+
+        function closeInviteModal() {
+            document.getElementById('inviteModal').classList.add('hidden');
+            document.getElementById('inviteMessage').value = '';
+            selectedUserForInvite = null;
+        }
+
+        async function searchUsers() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (query.length < 2) {
+                document.getElementById('searchResults').innerHTML = '<div style="padding: 20px; text-align: center; color: #8696a0;">Type at least 2 characters to search</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/search_users?q=${encodeURIComponent(query)}`, {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
+                const users = await response.json();
+
+                const resultsContainer = document.getElementById('searchResults');
+                if (users.length === 0) {
+                    resultsContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #8696a0;">No users found</div>';
+                    return;
+                }
+
+                resultsContainer.innerHTML = users.map(user => `
+                    <div class="search-result" onclick="openInviteModal(${JSON.stringify(user).replace(/"/g, '&quot;')})">
+                        ${createAvatar(user.user_id)}
+                        <div class="search-result-info">
+                            <div class="search-result-name">${user.user_id}</div>
+                            <div class="search-result-email">${user.email}</div>
+                        </div>
+                        <div class="invite-btn accept">Invite</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Search failed:', error);
+                document.getElementById('searchResults').innerHTML = '<div style="padding: 20px; text-align: center; color: #f44336;">Search failed. Please try again.</div>';
+            }
+        }
+
+        async function sendInvite() {
+            if (!selectedUserForInvite) return;
+
+            const message = document.getElementById('inviteMessage').value.trim();
+            
+            try {
+                const response = await fetch('/api/invite_user', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        to_user_id: selectedUserForInvite.user_id,
+                        message: message
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    closeInviteModal();
+                    closeSearchModal();
+                    alert('Invite sent successfully!');
+                    if (activeTab === 'invites') {
+                        loadInvites();
+                    }
+                } else {
+                    alert(result.error || 'Failed to send invite');
+                }
+            } catch (error) {
+                console.error('Send invite failed:', error);
+                alert('Failed to send invite. Please try again.');
+            }
+        }
+
+        async function loadInvites() {
+            if (!currentUser || !authToken) return;
+            
+            try {
+                const response = await fetch(`/api/invites?type=${activeInviteTab}`, {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
+                const invites = await response.json();
+
+                const containerId = activeInviteTab === 'received' ? 'receivedInvites' : 'sentInvites';
+                const container = document.getElementById(containerId);
+
+                if (!Array.isArray(invites) || invites.length === 0) {
+                    container.innerHTML = `<div style="padding: 20px; text-align: center; color: #8696a0;">No ${activeInviteTab} invites</div>`;
+                    return;
+                }
+
+                container.innerHTML = invites.map(invite => {
+                    const otherUser = invite.other_user_id;
+                    const timeAgo = formatTimestamp(new Date(invite.created_at));
+                    
+                    return `
+                        <div class="invite-item">
+                            <div class="invite-header">
+                                ${createAvatar(otherUser)}
+                                <div class="invite-info">
+                                    <div class="invite-from">${otherUser}</div>
+                                    <div class="invite-type">${invite.other_user_email}</div>
+                                </div>
+                                <div class="invite-status ${invite.status}">${invite.status}</div>
+                            </div>
+                            ${invite.message ? `<div class="invite-message">"${invite.message}"</div>` : ''}
+                            <div class="invite-time">${timeAgo}</div>
+                            ${invite.status === 'pending' ? `
+                                <div class="invite-actions">
+                                    ${activeInviteTab === 'received' ? `
+                                        <button class="invite-btn accept" onclick="respondToInvite(${invite.id}, 'accept')">Accept</button>
+                                        <button class="invite-btn reject" onclick="respondToInvite(${invite.id}, 'reject')">Decline</button>
+                                    ` : `
+                                        <button class="invite-btn cancel" onclick="cancelInvite(${invite.id})">Cancel</button>
+                                    `}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Load invites failed:', error);
+                const containerId = activeInviteTab === 'received' ? 'receivedInvites' : 'sentInvites';
+                document.getElementById(containerId).innerHTML = '<div style="padding: 20px; text-align: center; color: #f44336;">Failed to load invites</div>';
+            }
+        }
+
+        async function respondToInvite(inviteId, action) {
+            try {
+                const response = await fetch('/api/accept_invite', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        invite_id: inviteId,
+                        action: action
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    if (action === 'accept') {
+                        alert('Invite accepted! You can now chat with this user.');
+                        // Refresh contacts if we're on that tab
+                        if (activeTab === 'contacts') {
+                            loadContacts();
+                        }
+                    } else {
+                        alert('Invite declined.');
+                    }
+                    loadInvites(); // Refresh invites
+                } else {
+                    alert(result.error || `Failed to ${action} invite`);
+                }
+            } catch (error) {
+                console.error(`${action} invite failed:`, error);
+                alert(`Failed to ${action} invite. Please try again.`);
+            }
+        }
+
+        async function cancelInvite(inviteId) {
+            if (!confirm('Are you sure you want to cancel this invite?')) return;
+            
+            try {
+                // For now, we'll just reload - in a full implementation, 
+                // you'd want a cancel endpoint
+                alert('Invite cancellation not implemented yet');
+            } catch (error) {
+                console.error('Cancel invite failed:', error);
+            }
         }
 
         async function loadUnreadCounts() {
@@ -1102,6 +1479,7 @@
         // Message input event listeners
         document.addEventListener('DOMContentLoaded', () => {
             const messageInput = document.getElementById('messageInput');
+            const searchInput = document.getElementById('searchInput');
             
             messageInput.addEventListener('input', function() {
                 if (currentRoom && currentUser && socket) {
@@ -1124,6 +1502,30 @@
                 if (currentRoom && currentUser && socket) {
                     socket.emit('typing_stop', {room_id: currentRoom, user_id: currentUser});
                 }
+            });
+
+            // Search input with debounce
+            let searchTimeout;
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(searchUsers, 300);
+            });
+
+            // Close modals on escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeSearchModal();
+                    closeInviteModal();
+                }
+            });
+
+            // Close modals on backdrop click
+            document.getElementById('searchModal').addEventListener('click', function(e) {
+                if (e.target === this) closeSearchModal();
+            });
+            
+            document.getElementById('inviteModal').addEventListener('click', function(e) {
+                if (e.target === this) closeInviteModal();
             });
         });
 

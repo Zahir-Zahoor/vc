@@ -114,6 +114,7 @@ services:
       SESSION_SERVICE_URL: http://session-service:5000
       MESSAGING_SERVICE_URL: http://messaging-service:5000
       WEBSOCKET_SERVICE_URL: http://websocket-service:5000
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
     depends_on:
       - auth-service
       - user-service
