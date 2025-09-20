@@ -46,6 +46,17 @@ def get_status(user_id):
         'last_seen': float(last_seen) if last_seen else None
     })
 
+@app.route('/users')
+def get_users():
+    users = []
+    for user_id in redis_client.hkeys('user_status'):
+        status = redis_client.hget('user_status', user_id.decode())
+        users.append({
+            'user_id': user_id.decode(),
+            'status': status.decode() if status else 'offline'
+        })
+    return jsonify(users)
+
 @app.route('/update_presence', methods=['POST'])
 def update_presence():
     data = request.json

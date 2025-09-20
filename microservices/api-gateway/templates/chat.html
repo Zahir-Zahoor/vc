@@ -122,13 +122,38 @@
             color: #d1fae5;
         }
         
-        .groups-list {
+        .chat-tabs {
+            display: flex;
+            background: #2a3942;
+            border-bottom: 1px solid #3b4a54;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            color: #8696a0;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .tab.active {
+            color: #00a884;
+            border-bottom-color: #00a884;
+        }
+        
+        .tab:hover {
+            background: #3b4a54;
+        }
+        
+        .chat-list {
             flex: 1;
             overflow-y: auto;
             padding: 0 20px;
         }
         
-        .group-item {
+        .chat-item {
             background: #2a3942;
             padding: 15px;
             margin-bottom: 8px;
@@ -136,14 +161,52 @@
             cursor: pointer;
             transition: all 0.2s;
             color: #e9edef;
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
         
-        .group-item:hover {
+        .chat-item:hover {
             background: #3b4a54;
         }
         
-        .group-item.active {
+        .chat-item.active {
             background: #00a884;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #00a884;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .chat-info {
+            flex: 1;
+        }
+        
+        .chat-name {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        
+        .chat-preview {
+            font-size: 13px;
+            color: #8696a0;
+        }
+        
+        .online-dot {
+            width: 8px;
+            height: 8px;
+            background: #00a884;
+            border-radius: 50%;
+            margin-left: auto;
         }
         
         .chat-area {
@@ -158,6 +221,9 @@
             padding: 20px;
             border-bottom: 1px solid #2a3942;
             color: #e9edef;
+            display: flex;
+            align-items: center;
+            gap: 15px;
         }
         
         .chat-header h3 {
@@ -335,23 +401,44 @@
                 </div>
             </div>
             
-            <div class="groups-list" id="groupsList">
-                <div class="group-item" onclick="selectGroup(null)">
-                    <strong>Welcome</strong><br>
-                    <small>Select a group to start chatting</small>
+            <div class="chat-tabs">
+                <div class="tab active" id="groupsTab" onclick="switchTab('groups')">Groups</div>
+                <div class="tab" id="directTab" onclick="switchTab('direct')">Direct</div>
+            </div>
+            
+            <div class="chat-list" id="groupsList">
+                <div class="chat-item" onclick="selectChat(null, 'group')">
+                    <div class="user-avatar">#</div>
+                    <div class="chat-info">
+                        <div class="chat-name">Welcome</div>
+                        <div class="chat-preview">Select a group to start chatting</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-list" id="directList" style="display: none;">
+                <div class="chat-item" onclick="selectChat(null, 'direct')">
+                    <div class="user-avatar">👤</div>
+                    <div class="chat-info">
+                        <div class="chat-name">Direct Messages</div>
+                        <div class="chat-preview">Select a user to start chatting</div>
+                    </div>
                 </div>
             </div>
         </div>
         
         <div class="chat-area">
             <div class="chat-header" id="chatHeader" style="display: none;">
-                <h3 id="chatTitle">Group Name</h3>
-                <div class="status-text" id="chatStatus">Click to view group info</div>
+                <div class="user-avatar" id="chatAvatar">#</div>
+                <div>
+                    <h3 id="chatTitle">Chat Name</h3>
+                    <div class="status-text" id="chatStatus">Status</div>
+                </div>
             </div>
             
             <div class="welcome-screen" id="welcomeScreen">
                 <h2>Welcome to ChatApp</h2>
-                <p>Connect with your team through secure, real-time messaging. Create or join a group to get started.</p>
+                <p>Connect with your team through secure, real-time messaging. Create or join a group, or start a direct conversation.</p>
             </div>
             
             <div class="messages-container" id="messages" style="display: none;"></div>
@@ -373,7 +460,9 @@
         const socket = io('http://localhost:5001');
         let currentUser = null;
         let currentRoom = null;
-        let currentGroupName = null;
+        let currentChatName = null;
+        let currentChatType = null;
+        let activeTab = 'groups';
 
         socket.on('connect', () => {
             updateConnectionStatus(true);
@@ -401,6 +490,21 @@
                 indicator.style.display = 'none';
                 statusText.textContent = currentUser ? 'Connecting...' : 'Offline - Please login';
                 document.getElementById('status').classList.remove('online');
+            }
+        }
+
+        function switchTab(tab) {
+            activeTab = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(tab + 'Tab').classList.add('active');
+            
+            document.getElementById('groupsList').style.display = tab === 'groups' ? 'block' : 'none';
+            document.getElementById('directList').style.display = tab === 'direct' ? 'block' : 'none';
+            
+            if (tab === 'direct') {
+                loadUsers();
+            } else {
+                loadUserGroups();
             }
         }
 
@@ -484,52 +588,101 @@
                 groupsList.innerHTML = '';
                 
                 groups.forEach(group => {
-                    const groupItem = document.createElement('div');
-                    groupItem.className = 'group-item';
-                    groupItem.onclick = () => selectGroup(group.id, group.name);
-                    groupItem.innerHTML = `
-                        <strong>${group.name}</strong><br>
-                        <small>Group ID: ${group.id}</small>
+                    const chatItem = document.createElement('div');
+                    chatItem.className = 'chat-item';
+                    chatItem.onclick = () => selectChat(group.id, 'group', group.name);
+                    chatItem.innerHTML = `
+                        <div class="user-avatar">#</div>
+                        <div class="chat-info">
+                            <div class="chat-name">${group.name}</div>
+                            <div class="chat-preview">Group ID: ${group.id}</div>
+                        </div>
                     `;
-                    groupsList.appendChild(groupItem);
+                    groupsList.appendChild(chatItem);
                 });
             } catch (error) {
                 console.error('Load groups failed:', error);
             }
         }
 
-        async function selectGroup(groupId, groupName) {
-            if (!groupId) {
+        async function loadUsers() {
+            if (!currentUser) return;
+            
+            try {
+                const response = await fetch('/api/users');
+                const users = await response.json();
+                
+                const directList = document.getElementById('directList');
+                directList.innerHTML = '';
+                
+                users.filter(user => user.user_id !== currentUser).forEach(user => {
+                    const chatItem = document.createElement('div');
+                    chatItem.className = 'chat-item';
+                    chatItem.onclick = () => startDirectChat(user.user_id);
+                    chatItem.innerHTML = `
+                        <div class="user-avatar">${user.user_id[0].toUpperCase()}</div>
+                        <div class="chat-info">
+                            <div class="chat-name">${user.user_id}</div>
+                            <div class="chat-preview">${user.status}</div>
+                        </div>
+                        ${user.status === 'online' ? '<div class="online-dot"></div>' : ''}
+                    `;
+                    directList.appendChild(chatItem);
+                });
+            } catch (error) {
+                console.error('Load users failed:', error);
+            }
+        }
+
+        async function startDirectChat(otherUser) {
+            try {
+                const response = await fetch('/api/direct_chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({user1: currentUser, user2: otherUser})
+                });
+                
+                const data = await response.json();
+                selectChat(data.room_id, 'direct', otherUser);
+            } catch (error) {
+                console.error('Start direct chat failed:', error);
+            }
+        }
+
+        async function selectChat(chatId, type, name) {
+            if (!chatId) {
                 showWelcomeScreen();
                 return;
             }
             
-            currentRoom = groupId;
-            currentGroupName = groupName;
+            currentRoom = chatId;
+            currentChatName = name;
+            currentChatType = type;
             
             // Update UI
             document.getElementById('welcomeScreen').style.display = 'none';
-            document.getElementById('chatHeader').style.display = 'block';
+            document.getElementById('chatHeader').style.display = 'flex';
             document.getElementById('messages').style.display = 'block';
             document.getElementById('inputArea').style.display = 'block';
             
-            document.getElementById('chatTitle').textContent = groupName;
-            document.getElementById('chatStatus').textContent = `Group ID: ${groupId}`;
+            document.getElementById('chatTitle').textContent = name;
+            document.getElementById('chatAvatar').textContent = type === 'group' ? '#' : name[0].toUpperCase();
+            document.getElementById('chatStatus').textContent = type === 'group' ? `Group ID: ${chatId}` : 'Direct Message';
             
             // Clear messages
             document.getElementById('messages').innerHTML = '';
             
             // Load message history
-            await loadMessageHistory(groupId);
+            await loadMessageHistory(chatId);
             
             // Join room
-            socket.emit('join_room', {room_id: groupId, user_id: currentUser});
+            socket.emit('join_room', {room_id: chatId, user_id: currentUser});
             
-            // Update active group
-            document.querySelectorAll('.group-item').forEach(item => {
+            // Update active chat
+            document.querySelectorAll('.chat-item').forEach(item => {
                 item.classList.remove('active');
             });
-            event.target.classList.add('active');
+            event.target.closest('.chat-item').classList.add('active');
         }
 
         async function loadMessageHistory(roomId) {
@@ -598,7 +751,7 @@
             
             messageDiv.innerHTML = `
                 <div class="message-bubble">
-                    ${!isOwn ? `<div class="message-sender">${sender}</div>` : ''}
+                    ${!isOwn && currentChatType === 'group' ? `<div class="message-sender">${sender}</div>` : ''}
                     <div class="message-text">${message}</div>
                     <div class="message-info">${time}</div>
                 </div>

@@ -38,6 +38,26 @@ def get_groups(user_id):
     response = requests.get(f'{GROUP_SERVICE}/get_groups/{user_id}')
     return jsonify(response.json())
 
+@app.route('/api/users')
+def get_users():
+    try:
+        response = requests.get(f'{SESSION_SERVICE}/users')
+        return jsonify(response.json())
+    except:
+        return jsonify([])
+
+@app.route('/api/direct_chat', methods=['POST'])
+def create_direct_chat():
+    data = request.json
+    user1 = data['user1']
+    user2 = data['user2']
+    
+    # Create deterministic room ID for direct chat
+    users = sorted([user1, user2])
+    room_id = f"dm_{users[0]}_{users[1]}"
+    
+    return jsonify({'room_id': room_id, 'type': 'direct'})
+
 @app.route('/api/messages/<room_id>')
 def get_messages(room_id):
     try:
