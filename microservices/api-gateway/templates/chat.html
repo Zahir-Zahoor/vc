@@ -22,7 +22,7 @@
         .tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; color: #8696a0; border-bottom: 2px solid transparent; }
         .tab.active { color: #00a884; border-bottom-color: #00a884; }
         .chat-list { flex: 1; overflow-y: auto; padding: 0 20px; }
-        .chat-item { background: #2a3942; padding: 15px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; color: #e9edef; display: flex; align-items: center; gap: 12px; }
+        .chat-item { background: #2a3942; padding: 15px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; color: #e9edef; display: flex; align-items: center; gap: 12px; position: relative; }
         .chat-item:hover { background: #3b4a54; }
         .chat-item.active { background: #00a884; }
         .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: #00a884; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 16px; }
@@ -30,6 +30,23 @@
         .chat-name { font-weight: 600; margin-bottom: 2px; }
         .chat-preview { font-size: 13px; color: #8696a0; }
         .online-dot { width: 8px; height: 8px; background: #00a884; border-radius: 50%; margin-left: auto; }
+        
+        .unread-badge { 
+            position: absolute; 
+            top: 8px; 
+            right: 8px; 
+            background: #00a884; 
+            color: white; 
+            border-radius: 50%; 
+            min-width: 20px; 
+            height: 20px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 11px; 
+            font-weight: 600;
+            display: none;
+        }
         
         .chat-area { 
             flex: 1; 
@@ -201,7 +218,7 @@
         let activeTab = 'groups';
         let typingUsers = new Set();
         let typingTimeout = null;
-        let loadedMessages = new Set(); // Track loaded messages to avoid duplicate read receipts
+        let unreadCounts = {};
 
         socket.on('connect', () => {
             console.log('✅ Connected to WebSocket');
@@ -226,6 +243,9 @@
                         user_id: currentUser
                     });
                 }, 1000);
+            } else if (data.room_id != currentRoom) {
+                // Update unread count for other rooms
+                loadUnreadCounts();
             }
         });
 
@@ -256,7 +276,6 @@
                 const statusElement = messageElement.querySelector('.status-icon');
                 if (statusElement) {
                     statusElement.className = `status-icon ${status}`;
-                    console.log(`🔄 Updated message ${timestamp} status to ${status}`);
                 }
             }
         }
@@ -306,6 +325,33 @@
             if (tab === 'direct') loadAllUsers(); else loadMyGroups();
         }
 
+        async function loadUnreadCounts() {
+            if (!currentUser) return;
+            try {
+                const response = await fetch(`/api/unread_counts/${currentUser}`);
+                const data = await response.json();
+                if (!data.error) {
+                    unreadCounts = data;
+                    updateUnreadBadges();
+                }
+            } catch (error) {
+                console.error('Failed to load unread counts:', error);
+            }
+        }
+
+        function updateUnreadBadges() {
+            document.querySelectorAll('.chat-item').forEach(item => {
+                const roomId = item.getAttribute('data-room-id');
+                const badge = item.querySelector('.unread-badge');
+                if (roomId && unreadCounts[roomId] && unreadCounts[roomId] > 0) {
+                    badge.textContent = unreadCounts[roomId];
+                    badge.style.display = 'flex';
+                } else {
+                    badge.style.display = 'none';
+                }
+            });
+        }
+
         async function userLogin() {
             const userId = document.getElementById('userId').value.trim();
             if (!userId) { alert('Please enter your name'); return; }
@@ -318,6 +364,7 @@
                     currentUser = userId; 
                     updateStatus(true); 
                     loadMyGroups();
+                    loadUnreadCounts();
                     document.getElementById('userId').value = '';
                 }
             } catch (error) { console.error('Login failed:', error); }
@@ -333,7 +380,8 @@
                 });
                 const data = await response.json();
                 alert(`Group "${groupName}" created! ID: ${data.group_id}`);
-                document.getElementById('groupName').value = ''; loadMyGroups();
+                document.getElementById('groupName').value = ''; 
+                loadMyGroups();
             } catch (error) { console.error('Create group failed:', error); }
         }
 
@@ -345,7 +393,8 @@
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({group_id: parseInt(groupId), user_id: currentUser})
                 });
-                document.getElementById('joinGroupId').value = ''; loadMyGroups();
+                document.getElementById('joinGroupId').value = ''; 
+                loadMyGroups();
             } catch (error) { console.error('Join group failed:', error); }
         }
 
@@ -356,7 +405,6 @@
                 const data = await response.json();
                 
                 if (data.error || !Array.isArray(data)) {
-                    console.log('No groups found or error:', data);
                     document.getElementById('groupsList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">No groups found</div>';
                     return;
                 }
@@ -366,6 +414,7 @@
                 data.forEach(group => {
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
+                    chatItem.setAttribute('data-room-id', group.id);
                     chatItem.onclick = () => startChatRoom(group.id, 'group', group.name);
                     chatItem.innerHTML = `
                         <div class="user-avatar">#</div>
@@ -373,9 +422,11 @@
                             <div class="chat-name">${group.name}</div>
                             <div class="chat-preview">Group ID: ${group.id}</div>
                         </div>
+                        <div class="unread-badge">0</div>
                     `;
                     groupsList.appendChild(chatItem);
                 });
+                updateUnreadBadges();
             } catch (error) { 
                 console.error('Load groups failed:', error);
                 document.getElementById('groupsList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">Failed to load groups</div>';
@@ -389,7 +440,6 @@
                 const data = await response.json();
                 
                 if (data.error || !Array.isArray(data)) {
-                    console.log('No users found or error:', data);
                     document.getElementById('directList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">No users found</div>';
                     return;
                 }
@@ -397,8 +447,12 @@
                 const directList = document.getElementById('directList');
                 directList.innerHTML = '';
                 data.filter(user => user.user_id !== currentUser).forEach(user => {
+                    const users = [currentUser, user.user_id].sort();
+                    const roomId = `direct_${users[0]}_${users[1]}`;
+                    
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
+                    chatItem.setAttribute('data-room-id', roomId);
                     chatItem.onclick = () => beginDirectMessage(user.user_id);
                     chatItem.innerHTML = `
                         <div class="user-avatar">${user.user_id[0].toUpperCase()}</div>
@@ -407,9 +461,11 @@
                             <div class="chat-preview">${user.status}</div>
                         </div>
                         ${user.status === 'online' ? '<div class="online-dot"></div>' : ''}
+                        <div class="unread-badge">0</div>
                     `;
                     directList.appendChild(chatItem);
                 });
+                updateUnreadBadges();
             } catch (error) { 
                 console.error('Load users failed:', error);
                 document.getElementById('directList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">Failed to load users</div>';
@@ -431,7 +487,29 @@
             if (!chatId) { showWelcome(); return; }
             currentRoom = chatId; currentChatName = name; currentChatType = type;
             typingUsers.clear(); refreshTypingIndicator();
-            loadedMessages.clear(); // Clear loaded messages tracking
+            
+            // Mark room as read
+            if (currentUser && chatId) {
+                try {
+                    console.log('Marking room as read:', {user_id: currentUser, room_id: chatId});
+                    const response = await fetch('/api/mark_read', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({user_id: currentUser, room_id: String(chatId)})
+                    });
+                    
+                    if (!response.ok) {
+                        console.error('Mark read failed with status:', response.status);
+                        const errorText = await response.text();
+                        console.error('Error response:', errorText);
+                    } else {
+                        console.log('Successfully marked room as read');
+                        loadUnreadCounts(); // Refresh unread counts
+                    }
+                } catch (error) {
+                    console.error('Failed to mark as read:', error);
+                }
+            }
             
             document.getElementById('welcomeScreen').style.display = 'none';
             document.getElementById('chatHeader').style.display = 'flex';
@@ -442,27 +520,22 @@
             document.getElementById('chatAvatar').textContent = type === 'group' ? '#' : name[0].toUpperCase();
             document.getElementById('chatStatus').textContent = type === 'group' ? `Group ID: ${chatId}` : 'Direct Message';
             
-            // Clear messages and load from database
             document.getElementById('messages').innerHTML = '';
             await loadChatHistory(chatId);
             
-            // Join WebSocket room for real-time updates
             socket.emit('join_room', {room_id: chatId, user_id: currentUser});
             document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
         }
 
         async function loadChatHistory(roomId) {
             try {
-                console.log('📚 Loading chat history for room:', roomId);
                 const response = await fetch(`/api/messages/${roomId}`);
                 const data = await response.json();
                 
                 if (data.error || !Array.isArray(data)) {
-                    console.log('No messages found or error:', data);
                     return;
                 }
                 
-                console.log('📚 Loaded messages:', data.length);
                 data.forEach(msg => {
                     displayMessage(
                         msg.user_id, 
@@ -471,22 +544,7 @@
                         new Date(msg.timestamp), 
                         msg.delivery_status || 'delivered'
                     );
-                    loadedMessages.add(msg.timestamp);
                 });
-                
-                // Mark all unread messages from others as read
-                setTimeout(() => {
-                    data.forEach(msg => {
-                        if (msg.user_id !== currentUser && msg.delivery_status !== 'read') {
-                            console.log('📖 Marking message as read:', msg.timestamp);
-                            socket.emit('message_read', {
-                                room_id: roomId,
-                                timestamp: msg.timestamp,
-                                user_id: currentUser
-                            });
-                        }
-                    });
-                }, 1000);
                 
                 setTimeout(scrollMessagesToBottom, 100);
             } catch (error) { 
@@ -500,7 +558,7 @@
             document.getElementById('messages').style.display = 'none';
             document.getElementById('inputArea').style.display = 'none';
             document.getElementById('typingIndicator').style.display = 'none';
-            currentRoom = null; typingUsers.clear(); loadedMessages.clear();
+            currentRoom = null; typingUsers.clear();
         }
 
         async function sendChatMessage() {
@@ -512,10 +570,8 @@
             
             const timestamp = Date.now();
             
-            // Show message immediately for sender
             displayMessage(currentUser, message, true, new Date(timestamp), 'sent');
             
-            // Store in database first (for persistence)
             try {
                 const response = await fetch('/api/messages', {
                     method: 'POST', 
@@ -531,14 +587,11 @@
                 
                 if (response.ok) {
                     console.log('💾 Message stored in database');
-                } else {
-                    console.error('Failed to store message:', response.status);
                 }
             } catch (error) { 
                 console.error('Failed to store message:', error); 
             }
             
-            // Send via WebSocket for real-time delivery
             socket.emit('send_message', {
                 room_id: currentRoom, 
                 user_id: currentUser, 
@@ -592,6 +645,13 @@
                 socket.emit('typing_stop', {room_id: currentRoom, user_id: currentUser});
             }
         });
+
+        // Load unread counts periodically
+        setInterval(() => {
+            if (currentUser) {
+                loadUnreadCounts();
+            }
+        }, 10000); // Every 10 seconds
 
         showWelcome();
     </script>

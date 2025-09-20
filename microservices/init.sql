@@ -37,6 +37,16 @@ CREATE TABLE IF NOT EXISTS users (
     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Unread messages table for unread count feature
+CREATE TABLE IF NOT EXISTS unread_messages (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    room_id VARCHAR(255) NOT NULL,
+    message_id INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, room_id, message_id)
+);
+
 -- Performance indexes
 CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
@@ -44,6 +54,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_delivery_status ON messages(delivery_sta
 CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON group_members(group_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON group_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+CREATE INDEX IF NOT EXISTS idx_unread_messages_user_room ON unread_messages(user_id, room_id);
+CREATE INDEX IF NOT EXISTS idx_unread_messages_message_id ON unread_messages(message_id);
 
 -- Insert sample data for testing (optional)
 INSERT INTO users (user_id, status) VALUES 

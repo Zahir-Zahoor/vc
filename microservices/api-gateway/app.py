@@ -103,6 +103,22 @@ def get_messages(room_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/mark_read', methods=['POST'])
+def mark_read():
+    try:
+        response = requests.post(f'{MESSAGING_SERVICE_URL}/mark_read', json=request.json)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/unread_counts/<user_id>')
+def get_unread_counts(user_id):
+    try:
+        response = requests.get(f'{MESSAGING_SERVICE_URL}/unread_counts/{user_id}')
+        return jsonify(response.json())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/update_message_status', methods=['POST'])
 def update_message_status():
     try:

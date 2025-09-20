@@ -64,6 +64,30 @@ def on_join_room(data):
     
     print(f'{user_id} joined room {room_id}')
     emit('room_joined', {'room_id': room_id, 'user_id': user_id})
+    
+    # When user joins room, mark all their unread messages in this room as read
+    # and notify senders about read receipts
+    try:
+        # Get all messages in this room that were sent by others
+        response = requests.get(f'{MESSAGING_SERVICE_URL}/get_messages/{room_id}')
+        if response.status_code == 200:
+            messages = response.json()
+            for msg in messages:
+                if msg['user_id'] != user_id and msg.get('delivery_status') != 'read':
+                    # Update message status to read
+                    requests.post(f'{MESSAGING_SERVICE_URL}/update_message_status', 
+                                json={'timestamp': msg['timestamp'], 'status': 'read'})
+                    
+                    # Notify sender about read receipt
+                    emit('message_status_update', {
+                        'timestamp': msg['timestamp'],
+                        'status': 'read',
+                        'read_by': user_id
+                    }, room=room_id)
+                    
+                    print(f'📖 Marked message {msg["timestamp"]} as read by {user_id}')
+    except Exception as e:
+        print(f'Error updating read receipts on join: {e}')
 
 @socketio.on('send_message')
 def on_send_message(data):
