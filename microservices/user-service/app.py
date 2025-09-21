@@ -23,6 +23,25 @@ def get_db_connection():
 def health():
     return jsonify({'status': 'healthy'})
 
+@app.route('/user_status/<user_id>')
+def get_user_status(user_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("SELECT status FROM users WHERE user_id = %s", (user_id,))
+        result = cur.fetchone()
+        
+        cur.close()
+        conn.close()
+        
+        if result:
+            return jsonify({'status': result[0]})
+        else:
+            return jsonify({'status': 'offline'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/search_users', methods=['GET'])
 def search_users():
     query = request.args.get('q', '').strip()

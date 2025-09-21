@@ -191,6 +191,27 @@ def get_users():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/user_status/<user_id>')
+def get_user_status(user_id):
+    try:
+        response = requests.get(f'{USER_SERVICE_URL}/user_status/{user_id}')
+        return jsonify(response.json())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/recent_chats')
+def get_recent_chats():
+    try:
+        token = request.headers.get('Authorization')
+        user_id, email = get_user_from_token(token)
+        if not user_id:
+            return jsonify({'error': 'Unauthorized'}), 401
+            
+        response = requests.get(f'{MESSAGING_SERVICE_URL}/recent_chats/{user_id}')
+        return jsonify(response.json())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/direct_chat', methods=['POST'])
 def create_direct_chat():
     try:

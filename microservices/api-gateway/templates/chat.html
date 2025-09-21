@@ -103,6 +103,7 @@
         .chat-info { flex: 1; }
         .chat-name { font-weight: 600; margin-bottom: 2px; }
         .chat-preview { font-size: 13px; color: #8696a0; }
+        .chat-time { font-size: 12px; color: #8696a0; margin-left: 8px; }
         .online-dot { width: 8px; height: 8px; background: #00a884; border-radius: 50%; margin-left: auto; }
         .unread-badge { 
             position: absolute; 
@@ -426,14 +427,14 @@
             </div>
             
             <div class="chat-tabs">
-                <div class="tab active" id="groupsTab" onclick="changeTab('groups')">Groups</div>
-                <div class="tab" id="directTab" onclick="changeTab('direct')">Direct</div>
+                <div class="tab active" id="chatsTab" onclick="changeTab('chats')">Chats</div>
+                <div class="tab" id="groupsTab" onclick="changeTab('groups')">Groups</div>
                 <div class="tab" id="contactsTab" onclick="changeTab('contacts')">Contacts</div>
                 <div class="tab" id="invitesTab" onclick="changeTab('invites')">Invites</div>
             </div>
             
-            <div class="chat-list" id="groupsList"></div>
-            <div class="chat-list hidden" id="directList"></div>
+            <div class="chat-list" id="chatsList"></div>
+            <div class="chat-list hidden" id="groupsList"></div>
             <div class="chat-list hidden" id="contactsList"></div>
             <div class="chat-list hidden" id="invitesList">
                 <div class="invite-controls">
@@ -666,7 +667,7 @@
             
             // Initialize WebSocket and load data
             initializeSocket();
-            loadMyGroups();
+            loadRecentChats();
             loadUnreadCounts();
         }
 
@@ -879,12 +880,12 @@
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.getElementById(tab + 'Tab').classList.add('active');
             
+            document.getElementById('chatsList').classList.toggle('hidden', tab !== 'chats');
             document.getElementById('groupsList').classList.toggle('hidden', tab !== 'groups');
-            document.getElementById('directList').classList.toggle('hidden', tab !== 'direct');
             document.getElementById('contactsList').classList.toggle('hidden', tab !== 'contacts');
             document.getElementById('invitesList').classList.toggle('hidden', tab !== 'invites');
             
-            if (tab === 'direct') loadAllUsers();
+            if (tab === 'chats') loadRecentChats();
             else if (tab === 'groups') loadMyGroups();
             else if (tab === 'contacts') loadContacts();
             else if (tab === 'invites') loadInvites();
@@ -1125,10 +1126,10 @@
             document.querySelectorAll('.chat-item').forEach(item => {
                 const roomId = item.getAttribute('data-room-id');
                 const badge = item.querySelector('.unread-badge');
-                if (roomId && unreadCounts[roomId] && unreadCounts[roomId] > 0) {
+                if (badge && roomId && unreadCounts[roomId] && unreadCounts[roomId] > 0) {
                     badge.textContent = unreadCounts[roomId];
                     badge.style.display = 'flex';
-                } else {
+                } else if (badge) {
                     badge.style.display = 'none';
                 }
             });
@@ -1217,46 +1218,58 @@
             }
         }
 
-        async function loadAllUsers() {
+        function formatTime(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 24 * 60 * 60 * 1000) {
+                return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            } else if (diff < 7 * 24 * 60 * 60 * 1000) {
+                return date.toLocaleDateString([], {weekday: 'short'});
+            } else {
+                return date.toLocaleDateString([], {month: 'short', day: 'numeric'});
+            }
+        }
+
+        async function loadRecentChats() {
             if (!currentUser || !authToken) return;
             try {
-                const response = await fetch('/api/users', {
+                const response = await fetch('/api/recent_chats', {
                     headers: {'Authorization': `Bearer ${authToken}`}
                 });
                 const data = await response.json();
                 
                 if (data.error || !Array.isArray(data)) {
-                    document.getElementById('directList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">No users found</div>';
+                    document.getElementById('chatsList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">No recent chats</div>';
                     return;
                 }
                 
-                const directList = document.getElementById('directList');
-                directList.innerHTML = '';
-                data.filter(user => user.user_id !== currentUser).forEach(user => {
-                    const users = [currentUser, user.user_id].sort();
-                    const roomId = `direct_${users[0]}_${users[1]}`;
-                    
-                    userAvatars[user.user_id] = user.avatar_color;
+                const chatsList = document.getElementById('chatsList');
+                chatsList.innerHTML = '';
+                data.forEach(chat => {
+                    userAvatars[chat.other_user] = chat.avatar_color;
                     
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
-                    chatItem.setAttribute('data-room-id', roomId);
-                    chatItem.onclick = () => beginDirectMessage(user.user_id);
+                    chatItem.setAttribute('data-room-id', chat.room_id);
+                    chatItem.onclick = () => beginDirectMessage(chat.other_user);
                     chatItem.innerHTML = `
-                        ${createAvatar(user.user_id)}
+                        ${createAvatar(chat.other_user)}
                         <div class="chat-info">
-                            <div class="chat-name">${user.user_id}</div>
-                            <div class="chat-preview">${user.status}</div>
+                            <div class="chat-name">${chat.other_user}</div>
+                            <div class="chat-preview">${chat.last_message || 'No messages yet'}</div>
                         </div>
-                        ${user.status === 'online' ? '<div class="online-dot"></div>' : ''}
+                        <div class="chat-time">${formatTime(chat.last_message_time)}</div>
                         <div class="unread-badge">0</div>
                     `;
-                    directList.appendChild(chatItem);
+                    chatsList.appendChild(chatItem);
                 });
                 updateUnreadBadges();
             } catch (error) { 
-                console.error('Load users failed:', error);
-                document.getElementById('directList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">Failed to load users</div>';
+                console.error('Load recent chats failed:', error);
+                document.getElementById('chatsList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">Failed to load chats</div>';
             }
         }
 
@@ -1276,27 +1289,19 @@
                 const contactsList = document.getElementById('contactsList');
                 contactsList.innerHTML = '';
                 data.forEach(contact => {
-                    const users = [currentUser, contact.user_id].sort();
-                    const roomId = `direct_${users[0]}_${users[1]}`;
-                    
                     userAvatars[contact.user_id] = contact.avatar_color;
                     
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
-                    chatItem.setAttribute('data-room-id', roomId);
                     chatItem.onclick = () => beginDirectMessage(contact.user_id);
                     chatItem.innerHTML = `
                         ${createAvatar(contact.user_id)}
                         <div class="chat-info">
                             <div class="chat-name">${contact.user_id}</div>
-                            <div class="chat-preview">${contact.status}</div>
                         </div>
-                        ${contact.status === 'online' ? '<div class="online-dot"></div>' : ''}
-                        <div class="unread-badge">0</div>
                     `;
                     contactsList.appendChild(chatItem);
                 });
-                updateUnreadBadges();
             } catch (error) { 
                 console.error('Load contacts failed:', error);
                 document.getElementById('contactsList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">Failed to load contacts</div>';
@@ -1354,7 +1359,23 @@
             document.getElementById('chatAvatar').innerHTML = type === 'group' ? 
                 '<div class="user-avatar" style="background: #00a884;">#</div>' : 
                 createAvatar(name);
-            document.getElementById('chatStatus').textContent = type === 'group' ? `Group ID: ${chatId}` : 'Direct Message';
+            
+            // Show online status for direct messages
+            if (type === 'group') {
+                document.getElementById('chatStatus').textContent = `Group ID: ${chatId}`;
+            } else {
+                // Get user status for direct messages
+                try {
+                    const response = await fetch(`/api/user_status/${name}`, {
+                        headers: {'Authorization': `Bearer ${authToken}`}
+                    });
+                    const userData = await response.json();
+                    const status = userData.status === 'online' ? '🟢 Online' : '⚫ Offline';
+                    document.getElementById('chatStatus').textContent = status;
+                } catch (error) {
+                    document.getElementById('chatStatus').textContent = 'Direct Message';
+                }
+            }
             
             document.getElementById('messages').innerHTML = '';
             await loadChatHistory(chatId);

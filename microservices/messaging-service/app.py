@@ -15,6 +15,79 @@ def get_db_connection():
 def health():
     return jsonify({'status': 'healthy'})
 
+@app.route('/recent_chats/<user_id>')
+def get_recent_chats(user_id):
+    try:
+        print(f"Getting recent chats for user: {user_id}")
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get recent direct message conversations
+        query_param1 = f'direct_{user_id}_%'
+        query_param2 = f'direct_%_{user_id}'
+        print(f"Query params: {query_param1}, {query_param2}")
+        
+        cur.execute("""
+            SELECT DISTINCT room_id
+            FROM messages 
+            WHERE room_id LIKE %s OR room_id LIKE %s
+            ORDER BY room_id
+        """, (query_param1, query_param2))
+        
+        rows = cur.fetchall()
+        print(f"Found {len(rows)} rooms: {rows}")
+        
+        chats = []
+        for row in rows:
+            room_id = row[0]
+            print(f"Processing room: {room_id}")
+            
+            # Extract other user from room_id
+            if room_id.startswith('direct_'):
+                users_part = room_id[7:]  # Remove 'direct_' prefix
+                print(f"Users part: {users_part}")
+                
+                # Find the other user
+                other_user = None
+                if users_part.startswith(user_id + '_'):
+                    other_user = users_part[len(user_id) + 1:]
+                elif users_part.endswith('_' + user_id):
+                    other_user = users_part[:-len(user_id) - 1]
+                
+                print(f"Other user: {other_user}")
+                
+                if other_user:
+                    # Get latest message
+                    cur.execute("SELECT message, timestamp FROM messages WHERE room_id = %s ORDER BY timestamp DESC LIMIT 1", (room_id,))
+                    msg_result = cur.fetchone()
+                    
+                    # Get user avatar color
+                    cur.execute("SELECT avatar_color FROM users WHERE user_id = %s", (other_user,))
+                    avatar_result = cur.fetchone()
+                    avatar_color = avatar_result[0] if avatar_result else '#00a884'
+                    
+                    chats.append({
+                        'other_user': other_user,
+                        'room_id': room_id,
+                        'last_message_time': msg_result[1] if msg_result else None,
+                        'last_message': msg_result[0] if msg_result else 'No messages yet',
+                        'avatar_color': avatar_color
+                    })
+        
+        print(f"Final chats: {chats}")
+        
+        # Sort by last message time, newest first
+        chats.sort(key=lambda x: x['last_message_time'] or 0, reverse=True)
+        
+        cur.close()
+        conn.close()
+        return jsonify(chats)
+    except Exception as e:
+        print(f"Error getting recent chats: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify([])  # Return empty array on error
+
 @app.route('/send_message', methods=['POST'])
 def send_message():
     try:
@@ -41,14 +114,24 @@ def send_message():
         # Add unread entries for all room members except sender
         if str(room_id).startswith('direct_'):
             print("Processing direct message")
-            # Direct message - add unread for the other user
-            users = str(room_id).replace('direct_', '').split('_')
-            other_user = users[1] if users[0] == user_id else users[0]
-            cur.execute(
-                "INSERT INTO unread_messages (user_id, room_id, message_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-                (other_user, room_id, message_id)
-            )
-            print(f"Added unread for direct user: {other_user}")
+            # Direct message - extract other user properly
+            users_part = str(room_id)[7:]  # Remove 'direct_' prefix
+            
+            # Find the other user by checking which part matches current user
+            other_user = None
+            if users_part.startswith(user_id + '_'):
+                other_user = users_part[len(user_id) + 1:]
+            elif users_part.endswith('_' + user_id):
+                other_user = users_part[:-len(user_id) - 1]
+            
+            if other_user:
+                cur.execute(
+                    "INSERT INTO unread_messages (user_id, room_id, message_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                    (other_user, room_id, message_id)
+                )
+                print(f"Added unread for direct user: {other_user}")
+            else:
+                print(f"Could not determine other user from room_id: {room_id}")
         else:
             print(f"Processing group message for group_id: {room_id}")
             # Group message - add unread for all group members except sender
