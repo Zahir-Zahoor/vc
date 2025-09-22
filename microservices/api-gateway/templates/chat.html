@@ -343,6 +343,212 @@
         .modal-btn.primary { background: #00a884; color: white; }
         .modal-btn.secondary { background: #3b4a54; color: #e9edef; }
         
+        /* Create Group Styles */
+        .create-group-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #00a884 0%, #00c896 100%);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 15px auto;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 168, 132, 0.3);
+        }
+        .create-group-icon:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 168, 132, 0.4);
+        }
+        .create-group-icon .plus-icon {
+            width: auto;
+            height: auto;
+            background: none;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .group-settings-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #8696a0;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .group-settings-btn:hover {
+            background: #3b4a54;
+            color: #e9edef;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #3b4a54;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            color: #8696a0;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .close-btn:hover {
+            background: #3b4a54;
+            color: #e9edef;
+        }
+        .form-section {
+            margin-bottom: 20px;
+        }
+        .form-section input, .form-section textarea {
+            margin-bottom: 12px;
+        }
+        .group-settings {
+            margin: 20px 0;
+            padding: 16px;
+            background: #2a3942;
+            border-radius: 10px;
+            border-left: 4px solid #00a884;
+        }
+        .group-settings small {
+            display: block;
+            color: #8696a0;
+            font-size: 12px;
+            margin-top: 8px;
+            margin-left: 28px;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #e9edef;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .checkbox-label input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #00a884;
+        }
+        .invite-options {
+            margin-top: 20px;
+        }
+        .invite-options h4 {
+            color: #e9edef;
+            margin-bottom: 12px;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .create-tab-content {
+            margin-top: 12px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .contacts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .contact-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #3b4a54;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .contact-item:hover {
+            background: #4a5a64;
+        }
+        .contact-item.selected {
+            background: #00a884;
+            color: white;
+        }
+        .contact-checkbox {
+            width: 16px;
+            height: 16px;
+            accent-color: #00a884;
+        }
+        .link-info {
+            padding: 16px;
+            background: #2a3942;
+            border-radius: 8px;
+            color: #e9edef;
+        }
+        .link-info p {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .group-info {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: #2a3942;
+            border-radius: 10px;
+            border-left: 4px solid #00a884;
+        }
+        .group-info h4 {
+            color: #e9edef;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        .group-info p {
+            color: #8696a0;
+            font-size: 14px;
+            margin: 0;
+        }
+        .settings-section {
+            margin-bottom: 20px;
+        }
+        .settings-section h4 {
+            color: #e9edef;
+            margin-bottom: 12px;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .link-display {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .link-display input {
+            flex: 1;
+        }
+        .loading {
+            padding: 20px;
+            text-align: center;
+            color: #8696a0;
+            font-style: italic;
+        }
+        .btn-loading {
+            display: none;
+        }
+        .modal-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
         .hidden { display: none !important; }
     </style>
 </head>
@@ -434,7 +640,11 @@
             </div>
             
             <div class="chat-list" id="chatsList"></div>
-            <div class="chat-list hidden" id="groupsList"></div>
+            <div class="chat-list hidden" id="groupsList">
+                <div class="create-group-icon" onclick="showCreateGroupModal()" title="Create New Group">
+                    <div class="plus-icon">+</div>
+                </div>
+            </div>
             <div class="chat-list hidden" id="contactsList"></div>
             <div class="chat-list hidden" id="invitesList">
                 <div class="invite-controls">
@@ -503,6 +713,82 @@
             <div class="modal-actions">
                 <button class="modal-btn secondary" onclick="closeInviteModal()">Cancel</button>
                 <button class="modal-btn primary" onclick="sendInvite()">Send Invite</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Group Modal -->
+    <div class="search-modal hidden" id="createGroupModal">
+        <div class="search-modal-content">
+            <div class="modal-header">
+                <h3>🏷️ Create New Group</h3>
+                <button class="close-btn" onclick="closeCreateGroupModal()">×</button>
+            </div>
+            
+            <div class="form-section">
+                <input type="text" id="newGroupName" class="search-input" placeholder="Group name *" maxlength="50" required>
+                <textarea id="newGroupDescription" class="search-input" placeholder="Group description (optional)" rows="2" maxlength="200"></textarea>
+            </div>
+            
+            <div class="group-settings">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="requireApproval" checked>
+                    <span>🔒 Require admin approval for new members</span>
+                </label>
+                <small>When enabled, new members must be approved before joining</small>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="modal-btn secondary" onclick="closeCreateGroupModal()">Cancel</button>
+                <button class="modal-btn primary" onclick="createNewGroup()">
+                    <span class="btn-text">Create Group</span>
+                    <span class="btn-loading hidden">Creating...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Group Settings Modal -->
+    <div class="search-modal hidden" id="groupSettingsModal">
+        <div class="search-modal-content">
+            <div class="modal-header">
+                <h3>⚙️ Group Settings</h3>
+                <button class="close-btn" onclick="closeGroupSettings()">×</button>
+            </div>
+            
+            <div class="group-info">
+                <h4 id="settingsGroupName">Group Name</h4>
+                <p id="settingsGroupRole">Your Role</p>
+            </div>
+            
+            <div class="settings-section">
+                <h4>📨 Invite Members</h4>
+                <div class="invite-tabs">
+                    <button class="invite-tab active" onclick="switchSettingsTab('contacts')">👥 From Contacts</button>
+                    <button class="invite-tab" onclick="switchSettingsTab('link')">🔗 Share Link</button>
+                </div>
+                
+                <div id="settingsContactsTab" class="create-tab-content">
+                    <div id="settingsContactsList" class="contacts-list">
+                        <div class="loading">Loading contacts...</div>
+                    </div>
+                </div>
+                
+                <div id="settingsLinkTab" class="create-tab-content hidden">
+                    <div class="link-display">
+                        <input type="text" id="groupInviteLink" class="search-input" readonly>
+                        <button class="modal-btn secondary" onclick="copyInviteLink()">📋 Copy Link</button>
+                    </div>
+                    <p class="link-info">Share this link with anyone you want to invite to the group.</p>
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="modal-btn secondary" onclick="closeGroupSettings()">Close</button>
+                <button class="modal-btn primary" onclick="inviteSelectedUsers()" id="inviteBtn">
+                    <span class="btn-text">Send Invites</span>
+                    <span class="btn-loading hidden">Sending...</span>
+                </button>
             </div>
         </div>
     </div>
@@ -1189,32 +1475,375 @@
                 });
                 const data = await response.json();
                 
-                if (data.error || !Array.isArray(data)) {
-                    document.getElementById('groupsList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">No groups found</div>';
+                const groupsList = document.getElementById('groupsList');
+                groupsList.innerHTML = '';
+                
+                // Add create group icon at top
+                const createIcon = document.createElement('div');
+                createIcon.className = 'create-group-icon';
+                createIcon.onclick = showCreateGroupModal;
+                createIcon.title = 'Create New Group';
+                createIcon.innerHTML = '<div class="plus-icon">+</div>';
+                groupsList.appendChild(createIcon);
+                
+                if (data.error || !Array.isArray(data) || data.length === 0) {
+                    const emptyMsg = document.createElement('div');
+                    emptyMsg.style.cssText = 'padding: 20px; color: #8696a0; text-align: center;';
+                    emptyMsg.textContent = data.error ? 'Failed to load groups' : 'No groups yet. Create your first group!';
+                    groupsList.appendChild(emptyMsg);
                     return;
                 }
                 
-                const groupsList = document.getElementById('groupsList');
-                groupsList.innerHTML = '';
                 data.forEach(group => {
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
                     chatItem.setAttribute('data-room-id', group.id);
-                    chatItem.onclick = () => startChatRoom(group.id, 'group', group.name);
+                    chatItem.style.position = 'relative';
+                    chatItem.onclick = (e) => {
+                        if (!e.target.closest('.group-settings-btn')) {
+                            startChatRoom(group.id, 'group', group.name);
+                        }
+                    };
                     chatItem.innerHTML = `
-                        <div class="user-avatar" style="background: #00a884;">#</div>
+                        <div class="user-avatar" style="background: ${group.avatar_color || '#00a884'};">#</div>
                         <div class="chat-info">
                             <div class="chat-name">${group.name}</div>
-                            <div class="chat-preview">Group ID: ${group.id}</div>
+                            <div class="chat-preview">${group.role === 'owner' ? '👑 Owner' : group.role === 'admin' ? '🛡️ Admin' : '👤 Member'} • ${group.id}</div>
                         </div>
                         <div class="unread-badge">0</div>
+                        ${(group.role === 'owner' || group.role === 'admin') ? 
+                            `<button class="group-settings-btn" onclick="showGroupSettings(${group.id}, '${group.name}', '${group.role}')" title="Group Settings">⚙️</button>` : 
+                            ''
+                        }
                     `;
                     groupsList.appendChild(chatItem);
                 });
                 updateUnreadBadges();
             } catch (error) { 
                 console.error('Load groups failed:', error);
-                document.getElementById('groupsList').innerHTML = '<div style="padding: 20px; color: #8696a0; text-align: center;">Failed to load groups</div>';
+                const groupsList = document.getElementById('groupsList');
+                groupsList.innerHTML = `
+                    <div class="create-group-icon" onclick="showCreateGroupModal()" title="Create New Group">
+                        <div class="plus-icon">+</div>
+                    </div>
+                    <div style="padding: 20px; color: #8696a0; text-align: center;">Failed to load groups</div>
+                `;
+            }
+        }
+
+        // Create Group Modal Functions
+        let selectedContacts = new Set();
+        let activeCreateTab = 'contacts';
+
+        function showCreateGroupModal() {
+            document.getElementById('createGroupModal').classList.remove('hidden');
+            loadContactsForInvite();
+        }
+
+        function closeCreateGroupModal() {
+            document.getElementById('createGroupModal').classList.add('hidden');
+            document.getElementById('newGroupName').value = '';
+            document.getElementById('newGroupDescription').value = '';
+            document.getElementById('requireApproval').checked = true;
+            selectedContacts.clear();
+            activeCreateTab = 'contacts';
+        }
+
+        function switchCreateTab(tab) {
+            activeCreateTab = tab;
+            document.querySelectorAll('#createGroupModal .invite-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`#createGroupModal .invite-tab:nth-child(${tab === 'contacts' ? '1' : '2'})`).classList.add('active');
+            
+            document.getElementById('createContactsTab').classList.toggle('hidden', tab !== 'contacts');
+            document.getElementById('createLinkTab').classList.toggle('hidden', tab !== 'link');
+        }
+
+        async function loadContactsForInvite() {
+            if (!currentUser || !authToken) return;
+            
+            const contactsList = document.getElementById('contactsForInvite');
+            contactsList.innerHTML = '<div class="loading">📋 Loading your contacts...</div>';
+            
+            try {
+                const response = await fetch(`/api/contacts/${currentUser}`, {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
+                const data = await response.json();
+                
+                contactsList.innerHTML = '';
+                
+                if (!Array.isArray(data) || data.length === 0) {
+                    contactsList.innerHTML = `
+                        <div class="loading">
+                            👥 No contacts found<br>
+                            <small>Add contacts first to invite them to groups</small>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                data.forEach(contact => {
+                    const contactItem = document.createElement('div');
+                    contactItem.className = 'contact-item';
+                    contactItem.onclick = () => toggleContactSelection(contact.user_id, contactItem);
+                    contactItem.innerHTML = `
+                        <input type="checkbox" class="contact-checkbox" ${selectedContacts.has(contact.user_id) ? 'checked' : ''}>
+                        <div class="user-avatar" style="background: ${contact.avatar_color || '#00a884'};">${contact.user_id[0].toUpperCase()}</div>
+                        <span>${contact.user_id}</span>
+                    `;
+                    if (selectedContacts.has(contact.user_id)) {
+                        contactItem.classList.add('selected');
+                    }
+                    contactsList.appendChild(contactItem);
+                });
+                
+                // Add selection counter
+                if (data.length > 0) {
+                    const counter = document.createElement('div');
+                    counter.style.cssText = 'padding: 10px; text-align: center; color: #8696a0; font-size: 12px; border-top: 1px solid #3b4a54; margin-top: 10px;';
+                    counter.id = 'selectionCounter';
+                    counter.textContent = `${selectedContacts.size} of ${data.length} contacts selected`;
+                    contactsList.appendChild(counter);
+                }
+            } catch (error) {
+                console.error('Load contacts failed:', error);
+                contactsList.innerHTML = '<div class="loading">❌ Failed to load contacts</div>';
+            }
+        }
+
+        function toggleContactSelection(userId, element) {
+            const checkbox = element.querySelector('.contact-checkbox');
+            if (selectedContacts.has(userId)) {
+                selectedContacts.delete(userId);
+                checkbox.checked = false;
+                element.classList.remove('selected');
+            } else {
+                selectedContacts.add(userId);
+                checkbox.checked = true;
+                element.classList.add('selected');
+            }
+            
+            // Update counter
+            const counter = document.getElementById('selectionCounter');
+            if (counter) {
+                const total = document.querySelectorAll('.contact-item').length - 1; // -1 for counter div
+                counter.textContent = `${selectedContacts.size} of ${total} contacts selected`;
+            }
+        }
+
+        async function createNewGroup() {
+            const groupName = document.getElementById('newGroupName').value.trim();
+            const description = document.getElementById('newGroupDescription').value.trim();
+            const requireApproval = document.getElementById('requireApproval').checked;
+            const createBtn = document.querySelector('#createGroupModal .modal-btn.primary');
+            const btnText = createBtn.querySelector('.btn-text');
+            const btnLoading = createBtn.querySelector('.btn-loading');
+            
+            if (!groupName) {
+                alert('Please enter a group name');
+                document.getElementById('newGroupName').focus();
+                return;
+            }
+            
+            // Show loading state
+            createBtn.disabled = true;
+            btnText.classList.add('hidden');
+            btnLoading.classList.remove('hidden');
+            
+            try {
+                const response = await fetch('/api/create_group', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        name: groupName,
+                        description: description,
+                        creator_id: currentUser,
+                        require_approval: requireApproval
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const approvalText = requireApproval ? 'with approval required' : 'with open joining';
+                    alert(`✅ Group "${groupName}" created successfully ${approvalText}!\\n\\nUse the settings button (⚙️) to invite members.`);
+                    
+                    closeCreateGroupModal();
+                    loadMyGroups();
+                    
+                    // Switch to groups tab if not already there
+                    if (activeTab !== 'groups') {
+                        changeTab('groups');
+                    }
+                } else {
+                    alert('❌ ' + (data.error || 'Failed to create group'));
+                }
+            } catch (error) {
+                console.error('Create group failed:', error);
+                alert('❌ Failed to create group. Please try again.');
+            } finally {
+                // Reset button state
+                createBtn.disabled = false;
+                btnText.classList.remove('hidden');
+                btnLoading.classList.add('hidden');
+            }
+        }
+
+        // Group Settings Functions
+        let currentGroupId = null;
+        let currentGroupRole = null;
+        let settingsSelectedContacts = new Set();
+        let activeSettingsTab = 'contacts';
+
+        function showGroupSettings(groupId, groupName, role) {
+            currentGroupId = groupId;
+            currentGroupRole = role;
+            settingsSelectedContacts.clear();
+            
+            document.getElementById('settingsGroupName').textContent = groupName;
+            document.getElementById('settingsGroupRole').textContent = `${role === 'owner' ? '👑 Owner' : '🛡️ Admin'}`;
+            document.getElementById('groupSettingsModal').classList.remove('hidden');
+            
+            loadSettingsContacts();
+            loadGroupInviteLink(groupId);
+        }
+
+        function closeGroupSettings() {
+            document.getElementById('groupSettingsModal').classList.add('hidden');
+            currentGroupId = null;
+            currentGroupRole = null;
+            settingsSelectedContacts.clear();
+            activeSettingsTab = 'contacts';
+        }
+
+        function switchSettingsTab(tab) {
+            activeSettingsTab = tab;
+            document.querySelectorAll('#groupSettingsModal .invite-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`#groupSettingsModal .invite-tab:nth-child(${tab === 'contacts' ? '1' : '2'})`).classList.add('active');
+            
+            document.getElementById('settingsContactsTab').classList.toggle('hidden', tab !== 'contacts');
+            document.getElementById('settingsLinkTab').classList.toggle('hidden', tab !== 'link');
+        }
+
+        async function loadSettingsContacts() {
+            if (!currentUser || !authToken) return;
+            
+            const contactsList = document.getElementById('settingsContactsList');
+            contactsList.innerHTML = '<div class="loading">📋 Loading contacts...</div>';
+            
+            try {
+                const response = await fetch(`/api/contacts/${currentUser}`, {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
+                const data = await response.json();
+                
+                contactsList.innerHTML = '';
+                
+                if (!Array.isArray(data) || data.length === 0) {
+                    contactsList.innerHTML = '<div class="loading">👥 No contacts to invite</div>';
+                    return;
+                }
+                
+                data.forEach(contact => {
+                    const contactItem = document.createElement('div');
+                    contactItem.className = 'contact-item';
+                    contactItem.onclick = () => toggleSettingsContactSelection(contact.user_id, contactItem);
+                    contactItem.innerHTML = `
+                        <input type="checkbox" class="contact-checkbox">
+                        <div class="user-avatar" style="background: ${contact.avatar_color || '#00a884'};">${contact.user_id[0].toUpperCase()}</div>
+                        <span>${contact.user_id}</span>
+                    `;
+                    contactsList.appendChild(contactItem);
+                });
+            } catch (error) {
+                console.error('Load contacts failed:', error);
+                contactsList.innerHTML = '<div class="loading">❌ Failed to load contacts</div>';
+            }
+        }
+
+        function toggleSettingsContactSelection(userId, element) {
+            const checkbox = element.querySelector('.contact-checkbox');
+            if (settingsSelectedContacts.has(userId)) {
+                settingsSelectedContacts.delete(userId);
+                checkbox.checked = false;
+                element.classList.remove('selected');
+            } else {
+                settingsSelectedContacts.add(userId);
+                checkbox.checked = true;
+                element.classList.add('selected');
+            }
+        }
+
+        async function loadGroupInviteLink(groupId) {
+            try {
+                const response = await fetch(`/api/group_invite_link/${groupId}`, {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const fullLink = `${window.location.origin}/join/${data.invite_link}`;
+                    document.getElementById('groupInviteLink').value = fullLink;
+                }
+            } catch (error) {
+                console.error('Load invite link failed:', error);
+            }
+        }
+
+        function copyInviteLink() {
+            const linkInput = document.getElementById('groupInviteLink');
+            linkInput.select();
+            document.execCommand('copy');
+            alert('📋 Invite link copied to clipboard!');
+        }
+
+        async function inviteSelectedUsers() {
+            if (settingsSelectedContacts.size === 0) {
+                alert('Please select contacts to invite');
+                return;
+            }
+            
+            const inviteBtn = document.getElementById('inviteBtn');
+            const btnText = inviteBtn.querySelector('.btn-text');
+            const btnLoading = inviteBtn.querySelector('.btn-loading');
+            
+            inviteBtn.disabled = true;
+            btnText.classList.add('hidden');
+            btnLoading.classList.remove('hidden');
+            
+            try {
+                const response = await fetch('/api/invite_users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        group_id: currentGroupId,
+                        user_ids: Array.from(settingsSelectedContacts),
+                        inviter_id: currentUser
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    alert(`✅ ${data.message || 'Invites sent successfully!'}`);
+                    settingsSelectedContacts.clear();
+                    loadSettingsContacts();
+                } else {
+                    alert('❌ ' + (data.error || 'Failed to send invites'));
+                }
+            } catch (error) {
+                console.error('Invite users failed:', error);
+                alert('❌ Failed to send invites');
+            } finally {
+                inviteBtn.disabled = false;
+                btnText.classList.remove('hidden');
+                btnLoading.classList.add('hidden');
             }
         }
 

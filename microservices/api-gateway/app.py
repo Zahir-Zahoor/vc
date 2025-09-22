@@ -143,6 +143,20 @@ def get_contacts():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/contacts/<user_id>')
+def get_user_contacts(user_id):
+    try:
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        auth_user_id, _ = get_user_from_token(token)
+        if not auth_user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+            
+        headers = {'X-User-ID': user_id}
+        response = requests.get(f'{USER_SERVICE_URL}/contacts', headers=headers)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/invites')
 def get_invites():
     try:
@@ -256,6 +270,30 @@ def get_unread_counts(user_id):
 def update_message_status():
     try:
         response = requests.post(f'{MESSAGING_SERVICE_URL}/update_message_status', json=request.json)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/invite_users', methods=['POST'])
+def invite_users():
+    try:
+        response = requests.post(f'{GROUP_SERVICE_URL}/invite_users', json=request.json)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/join_by_link', methods=['POST'])
+def join_by_link():
+    try:
+        response = requests.post(f'{GROUP_SERVICE_URL}/join_by_link', json=request.json)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/group_invite_link/<group_id>')
+def get_group_invite_link(group_id):
+    try:
+        response = requests.get(f'{GROUP_SERVICE_URL}/group_invite_link/{group_id}')
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({'error': str(e)}), 500

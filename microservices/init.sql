@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS groups (
     avatar_color VARCHAR(7) DEFAULT '#00a884',
     is_private BOOLEAN DEFAULT FALSE,
     max_members INTEGER DEFAULT 100,
+    invite_link VARCHAR(255) UNIQUE,
+    require_approval BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -68,6 +70,17 @@ CREATE TABLE IF NOT EXISTS group_members (
     role VARCHAR(20) DEFAULT 'member', -- owner, admin, member
     permissions JSONB DEFAULT '{"can_invite": false, "can_remove": false, "can_edit_group": false}',
     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(group_id, user_id)
+);
+
+-- Group join requests table for approval-based groups
+CREATE TABLE IF NOT EXISTS group_join_requests (
+    id SERIAL PRIMARY KEY,
+    group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
+    user_id VARCHAR(255) REFERENCES users(user_id) ON DELETE CASCADE,
+    status VARCHAR(20) DEFAULT 'pending', -- pending, approved, rejected
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(group_id, user_id)
 );
 
@@ -113,9 +126,9 @@ CREATE INDEX IF NOT EXISTS idx_unread_messages_user_room ON unread_messages(user
 -- Insert sample data for testing
 -- Note: Passwords are hashed with bcrypt for 'password123'
 INSERT INTO users (user_id, email, password_hash, status, avatar_color, is_verified) VALUES 
-    ('alice', 'alice@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/RK.PmvlJO', 'online', '#e91e63', TRUE),
-    ('bob', 'bob@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/RK.PmvlJO', 'offline', '#2196f3', TRUE),
-    ('charlie', 'charlie@example.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/RK.PmvlJO', 'online', '#ff9800', TRUE)
+    ('alice', 'alice@example.com', '$2b$12$9k31syqeqHUn4Io.U9cOTuMAcLYSN.6strbcFsWqCSbUfqo2AgXP6', 'online', '#e91e63', TRUE),
+    ('bob', 'bob@example.com', '$2b$12$9k31syqeqHUn4Io.U9cOTuMAcLYSN.6strbcFsWqCSbUfqo2AgXP6', 'offline', '#2196f3', TRUE),
+    ('charlie', 'charlie@example.com', '$2b$12$9k31syqeqHUn4Io.U9cOTuMAcLYSN.6strbcFsWqCSbUfqo2AgXP6', 'online', '#ff9800', TRUE)
 ON CONFLICT (user_id) DO UPDATE SET
     email = EXCLUDED.email,
     avatar_color = EXCLUDED.avatar_color,
