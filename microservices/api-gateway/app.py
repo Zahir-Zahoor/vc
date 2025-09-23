@@ -306,5 +306,18 @@ def get_group_members(group_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/remove_member', methods=['POST'])
+def remove_member():
+    try:
+        response = requests.post(f'{GROUP_SERVICE_URL}/remove_member', json=request.json)
+        if response.status_code == 404:
+            return jsonify({'error': 'Endpoint not found'}), 404
+        if response.text:
+            return jsonify(response.json()), response.status_code
+        else:
+            return jsonify({'error': 'Empty response from service'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

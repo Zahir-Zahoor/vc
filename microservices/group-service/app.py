@@ -18,74 +18,83 @@ def health():
 @app.route('/create_group', methods=['POST'])
 def create_group():
     data = request.json
-    name = data['name']
-    creator_id = data['creator_id']
+    name = data.get('name')
     description = data.get('description', '')
+    creator_id = data.get('creator_id')
     require_approval = data.get('require_approval', True)
+    
+    if not name or not creator_id:
+        return jsonify({'error': 'Name and creator_id are required'}), 400
     
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Generate invite link
+        # Generate unique invite link
         invite_link = str(uuid.uuid4())
         
         # Create group
-        cur.execute(
-            "INSERT INTO groups (name, description, creator_id, invite_link, require_approval) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (name, description, creator_id, invite_link, require_approval)
-        )
+        cur.execute("""
+            INSERT INTO groups (name, description, creator_id, invite_link, require_approval, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
+        """, (name, description, creator_id, invite_link, require_approval, datetime.now()))
+        
         group_id = cur.fetchone()[0]
         
         # Add creator as owner
-        cur.execute(
-            "INSERT INTO group_members (group_id, user_id, role, permissions) VALUES (%s, %s, 'owner', %s)",
-            (group_id, creator_id, '{"can_invite": true, "can_remove": true, "can_edit_group": true}')
-        )
+        cur.execute("""
+            INSERT INTO group_members (group_id, user_id, role, joined_at)
+            VALUES (%s, %s, 'owner', %s)
+        """, (group_id, creator_id, datetime.now()))
         
         conn.commit()
-        cur.close()
-        conn.close()
         
         return jsonify({
-            'group_id': group_id,
+            'id': group_id,
+            'name': name,
+            'description': description,
             'invite_link': invite_link,
             'require_approval': require_approval
         })
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route('/join_group', methods=['POST'])
 def join_group():
     data = request.json
-    group_id = data['group_id']
-    user_id = data['user_id']
+    group_id = data.get('group_id')
+    user_id = data.get('user_id')
+    
+    if not group_id or not user_id:
+        return jsonify({'error': 'Group ID and user ID are required'}), 400
     
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Check if user already in group
-        cur.execute(
-            "SELECT id FROM group_members WHERE group_id = %s AND user_id = %s",
-            (group_id, user_id)
-        )
+        # Check if user is already a member
+        cur.execute("SELECT role FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
         if cur.fetchone():
-            return jsonify({'message': 'Already in group'})
+            return jsonify({'error': 'User is already a member'}), 400
         
-        # Add user to group
-        cur.execute(
-            "INSERT INTO group_members (group_id, user_id, role) VALUES (%s, %s, 'member')",
-            (group_id, user_id)
-        )
+        # Add user as member
+        cur.execute("""
+            INSERT INTO group_members (group_id, user_id, role, joined_at)
+            VALUES (%s, %s, 'member', %s)
+        """, (group_id, user_id, datetime.now()))
         
         conn.commit()
-        cur.close()
-        conn.close()
+        return jsonify({'message': 'Successfully joined group'})
         
-        return jsonify({'message': 'Joined group successfully'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route('/user_groups/<user_id>')
 def get_user_groups(user_id):
@@ -94,9 +103,9 @@ def get_user_groups(user_id):
         cur = conn.cursor()
         
         cur.execute("""
-            SELECT g.id, g.name, g.creator_id, gm.role 
-            FROM groups g 
-            JOIN group_members gm ON g.id = gm.group_id 
+            SELECT g.id, g.name, g.description, gm.role, g.created_at
+            FROM groups g
+            JOIN group_members gm ON g.id = gm.group_id
             WHERE gm.user_id = %s
             ORDER BY g.created_at DESC
         """, (user_id,))
@@ -106,16 +115,18 @@ def get_user_groups(user_id):
             groups.append({
                 'id': row[0],
                 'name': row[1],
-                'creator_id': row[2],
-                'role': row[3]
+                'description': row[2],
+                'role': row[3],
+                'created_at': row[4].isoformat() if row[4] else None
             })
         
-        cur.close()
-        conn.close()
-        
         return jsonify(groups)
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route('/group_members/<group_id>')
 def get_group_members(group_id):
@@ -124,16 +135,17 @@ def get_group_members(group_id):
         cur = conn.cursor()
         
         cur.execute("""
-            SELECT gm.user_id, gm.role, u.avatar_color, gm.joined_at 
+            SELECT gm.user_id, gm.role, gm.joined_at, u.avatar_color
             FROM group_members gm
             LEFT JOIN users u ON gm.user_id = u.user_id
-            WHERE gm.group_id = %s 
+            WHERE gm.group_id = %s
             ORDER BY 
                 CASE gm.role 
                     WHEN 'owner' THEN 1 
                     WHEN 'admin' THEN 2 
                     ELSE 3 
-                END, gm.joined_at ASC
+                END,
+                gm.joined_at
         """, (group_id,))
         
         members = []
@@ -141,34 +153,38 @@ def get_group_members(group_id):
             members.append({
                 'user_id': row[0],
                 'role': row[1],
-                'avatar_color': row[2] or '#00a884',
-                'joined_at': row[3].isoformat() if row[3] else None
+                'joined_at': row[2].isoformat() if row[2] else None,
+                'avatar_color': row[3] or '#00a884'
             })
         
-        cur.close()
-        conn.close()
-        
         return jsonify(members)
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
 
 @app.route('/direct_chat', methods=['POST'])
 def create_direct_chat():
     data = request.json
-    user1 = data['user1']
-    user2 = data['user2']
+    user1 = data.get('user1')
+    user2 = data.get('user2')
     
     # Create a consistent room ID for direct chats
     users = sorted([user1, user2])
-    room_id = f"direct_{users[0]}_{users[1]}"
+    room_id = f"dm_{users[0]}_{users[1]}"
     
     return jsonify({'room_id': room_id})
 
 @app.route('/join_by_link', methods=['POST'])
 def join_by_link():
     data = request.json
-    invite_link = data['invite_link']
-    user_id = data['user_id']
+    invite_link = data.get('invite_link')
+    user_id = data.get('user_id')
+    
+    if not invite_link or not user_id:
+        return jsonify({'error': 'Invite link and user ID are required'}), 400
     
     try:
         conn = get_db_connection()
@@ -176,34 +192,30 @@ def join_by_link():
         
         # Find group by invite link
         cur.execute("SELECT id, name, require_approval FROM groups WHERE invite_link = %s", (invite_link,))
-        group_data = cur.fetchone()
+        group = cur.fetchone()
         
-        if not group_data:
+        if not group:
             return jsonify({'error': 'Invalid invite link'}), 404
         
-        group_id, group_name, require_approval = group_data
+        group_id, group_name, require_approval = group
         
-        # Check if user already in group
-        cur.execute("SELECT id FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
+        # Check if user is already a member
+        cur.execute("SELECT role FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
         if cur.fetchone():
-            return jsonify({'message': 'Already in group'})
+            return jsonify({'error': 'User is already a member'}), 400
         
         if require_approval:
-            # Add to pending approvals
-            cur.execute(
-                "INSERT INTO group_join_requests (group_id, user_id, status) VALUES (%s, %s, 'pending') ON CONFLICT (group_id, user_id) DO UPDATE SET status = 'pending', created_at = CURRENT_TIMESTAMP",
-                (group_id, user_id)
-            )
-            conn.commit()
+            # Add as pending member (you might want to implement a pending_members table)
             return jsonify({'message': 'Join request sent for approval', 'group_name': group_name})
         else:
-            # Add directly to group
-            cur.execute(
-                "INSERT INTO group_members (group_id, user_id, role) VALUES (%s, %s, 'member')",
-                (group_id, user_id)
-            )
+            # Add directly as member
+            cur.execute("""
+                INSERT INTO group_members (group_id, user_id, role, joined_at)
+                VALUES (%s, %s, 'member', %s)
+            """, (group_id, user_id, datetime.now()))
+            
             conn.commit()
-            return jsonify({'message': 'Joined group successfully', 'group_name': group_name})
+            return jsonify({'message': f'Successfully joined {group_name}', 'group_id': group_id})
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -214,44 +226,57 @@ def join_by_link():
 @app.route('/invite_users', methods=['POST'])
 def invite_users():
     data = request.json
-    group_id = data['group_id']
-    user_ids = data['user_ids']
-    inviter_id = data['inviter_id']
+    group_id = data.get('group_id')
+    user_ids = data.get('user_ids', [])
+    inviter_id = data.get('inviter_id')
+    
+    if not group_id or not user_ids or not inviter_id:
+        return jsonify({'error': 'Missing required fields'}), 400
     
     try:
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Check if inviter has permission (owners and admins can invite)
-        cur.execute(
-            "SELECT role, permissions FROM group_members WHERE group_id = %s AND user_id = %s",
-            (group_id, inviter_id)
-        )
-        result = cur.fetchone()
-        if not result:
-            return jsonify({'error': 'Not a member of this group'}), 403
+        # Check if inviter has permission (owner or admin)
+        cur.execute("SELECT role FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, inviter_id))
+        inviter_role = cur.fetchone()
         
-        role, permissions = result
-        # Allow owners and admins to invite, or check permissions
-        can_invite = role in ['owner', 'admin'] or (permissions and permissions.get('can_invite', False))
+        if not inviter_role or inviter_role[0] not in ['owner', 'admin']:
+            return jsonify({'error': 'Insufficient permissions'}), 403
         
-        if not can_invite:
-            return jsonify({'error': 'No permission to invite'}), 403
+        successful_invites = []
+        failed_invites = []
         
-        invited_count = 0
         for user_id in user_ids:
-            # Check if user already in group
-            cur.execute("SELECT id FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
-            if not cur.fetchone():
-                # Send invite
-                cur.execute(
-                    "INSERT INTO invites (from_user_id, to_user_id, invite_type, target_id, message) VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
-                    (inviter_id, user_id, 'group', group_id, f'Invited you to join the group')
-                )
-                invited_count += 1
+            try:
+                # Check if user is already a member
+                cur.execute("SELECT role FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
+                if cur.fetchone():
+                    failed_invites.append(f"{user_id} is already a member")
+                    continue
+                
+                # Add user as member
+                cur.execute("""
+                    INSERT INTO group_members (group_id, user_id, role, joined_at)
+                    VALUES (%s, %s, 'member', %s)
+                """, (group_id, user_id, datetime.now()))
+                
+                successful_invites.append(user_id)
+                
+            except Exception as e:
+                failed_invites.append(f"{user_id}: {str(e)}")
         
         conn.commit()
-        return jsonify({'message': f'Invited {invited_count} users'})
+        
+        message = f"Successfully invited {len(successful_invites)} users"
+        if failed_invites:
+            message += f". {len(failed_invites)} failed"
+        
+        return jsonify({
+            'message': message,
+            'successful': successful_invites,
+            'failed': failed_invites
+        })
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -275,6 +300,58 @@ def get_group_invite_link(group_id):
             'invite_link': result[0],
             'require_approval': result[1]
         })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/remove_member', methods=['POST'])
+def remove_member():
+    data = request.json
+    group_id = data.get('group_id')
+    user_id = data.get('user_id')
+    remover_id = data.get('remover_id')
+    
+    if not all([group_id, user_id, remover_id]):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check if remover is owner or admin
+        cur.execute("""
+            SELECT role FROM group_members 
+            WHERE group_id = %s AND user_id = %s
+        """, (group_id, remover_id))
+        
+        remover_role = cur.fetchone()
+        if not remover_role or remover_role[0] not in ['owner', 'admin']:
+            return jsonify({'error': 'Insufficient permissions'}), 403
+        
+        # Cannot remove owner
+        cur.execute("""
+            SELECT role FROM group_members 
+            WHERE group_id = %s AND user_id = %s
+        """, (group_id, user_id))
+        
+        target_role = cur.fetchone()
+        if not target_role:
+            return jsonify({'error': 'User not in group'}), 404
+        
+        if target_role[0] == 'owner':
+            return jsonify({'error': 'Cannot remove group owner'}), 403
+        
+        # Remove the member
+        cur.execute("""
+            DELETE FROM group_members 
+            WHERE group_id = %s AND user_id = %s
+        """, (group_id, user_id))
+        
+        conn.commit()
+        return jsonify({'message': 'Member removed successfully'})
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
