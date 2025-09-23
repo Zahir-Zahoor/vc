@@ -123,17 +123,26 @@ def get_group_members(group_id):
         conn = get_db_connection()
         cur = conn.cursor()
         
-        cur.execute(
-            "SELECT user_id, role, joined_at FROM group_members WHERE group_id = %s ORDER BY joined_at ASC",
-            (group_id,)
-        )
+        cur.execute("""
+            SELECT gm.user_id, gm.role, u.avatar_color, gm.joined_at 
+            FROM group_members gm
+            LEFT JOIN users u ON gm.user_id = u.user_id
+            WHERE gm.group_id = %s 
+            ORDER BY 
+                CASE gm.role 
+                    WHEN 'owner' THEN 1 
+                    WHEN 'admin' THEN 2 
+                    ELSE 3 
+                END, gm.joined_at ASC
+        """, (group_id,))
         
         members = []
         for row in cur.fetchall():
             members.append({
                 'user_id': row[0],
                 'role': row[1],
-                'joined_at': row[2].isoformat() if row[2] else None
+                'avatar_color': row[2] or '#00a884',
+                'joined_at': row[3].isoformat() if row[3] else None
             })
         
         cur.close()

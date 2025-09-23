@@ -298,5 +298,13 @@ def get_group_invite_link(group_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/group_members/<group_id>')
+def get_group_members(group_id):
+    try:
+        response = requests.get(f'{GROUP_SERVICE_URL}/group_members/{group_id}')
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

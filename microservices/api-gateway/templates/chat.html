@@ -140,8 +140,35 @@
             color: #e9edef; 
             display: flex; 
             align-items: center; 
-            gap: 15px;
+            justify-content: space-between;
             z-index: 10;
+        }
+        
+        .chat-header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .chat-header-right {
+            display: flex;
+            align-items: center;
+        }
+        
+        .group-settings-btn {
+            background: none;
+            border: none;
+            color: #8696a0;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+        
+        .group-settings-btn:hover {
+            background: #3b4a54;
+            color: #00a884;
         }
         
         .messages-container { 
@@ -656,10 +683,17 @@
             </div>
             
             <div class="chat-header hidden" id="chatHeader">
-                <div class="user-avatar" id="chatAvatar">#</div>
-                <div>
-                    <h3 id="chatTitle">Chat Name</h3>
-                    <div id="chatStatus">Status</div>
+                <div class="chat-header-left">
+                    <div class="user-avatar" id="chatAvatar">#</div>
+                    <div>
+                        <h3 id="chatTitle">Chat Name</h3>
+                        <div id="chatStatus">Status</div>
+                    </div>
+                </div>
+                <div class="chat-header-right">
+                    <button class="group-settings-btn hidden" id="groupSettingsBtn" onclick="openGroupSettings()" title="Group Settings">
+                        ⚙️
+                    </button>
                 </div>
             </div>
             
@@ -757,6 +791,7 @@
                 <div class="invite-tabs">
                     <button class="invite-tab active" onclick="switchSettingsTab('contacts')">👥 From Contacts</button>
                     <button class="invite-tab" onclick="switchSettingsTab('link')">🔗 Share Link</button>
+                    <button class="invite-tab" onclick="switchSettingsTab('members')">👤 Members</button>
                 </div>
                 
                 <div id="settingsContactsTab" class="create-tab-content">
@@ -771,6 +806,12 @@
                         <button class="modal-btn secondary" onclick="copyInviteLink()">📋 Copy Link</button>
                     </div>
                     <p class="link-info">Share this link with anyone you want to invite to the group.</p>
+                </div>
+                
+                <div id="settingsMembersTab" class="create-tab-content hidden">
+                    <div id="groupMembersList" class="contacts-list">
+                        <div class="loading">Loading members...</div>
+                    </div>
                 </div>
             </div>
             
@@ -1492,7 +1533,7 @@
                     chatItem.style.position = 'relative';
                     chatItem.onclick = (e) => {
                         if (!e.target.closest('.group-settings-btn')) {
-                            startChatRoom(group.id, 'group', group.name);
+                            startChatRoom(group.id, 'group', group.name, group);
                         }
                     };
                     chatItem.innerHTML = `
@@ -1686,26 +1727,66 @@
         // Group Settings Functions
         let currentGroupId = null;
         let currentGroupRole = null;
+        let currentGroupName = null;
         let settingsSelectedContacts = new Set();
         let activeSettingsTab = 'contacts';
 
+        function openGroupSettings() {
+            if (currentGroupId && currentGroupRole && currentGroupName) {
+                showGroupSettings(currentGroupId, currentGroupName, currentGroupRole);
+            }
+        }
+
         function showGroupSettings(groupId, groupName, role) {
             currentGroupId = groupId;
+            currentGroupName = groupName;
             currentGroupRole = role;
             settingsSelectedContacts.clear();
             
             document.getElementById('settingsGroupName').textContent = groupName;
-            document.getElementById('settingsGroupRole').textContent = `${role === 'owner' ? '👑 Owner' : '🛡️ Admin'}`;
+            
+            // Update role display and permissions
+            const roleText = role === 'owner' ? '👑 Owner' : role === 'admin' ? '🛡️ Admin' : '👤 Member';
+            document.getElementById('settingsGroupRole').textContent = roleText;
+            
+            // Show/hide tabs based on role
+            const inviteTab = document.querySelector('#groupSettingsModal .invite-tab:nth-child(1)');
+            const linkTab = document.querySelector('#groupSettingsModal .invite-tab:nth-child(2)');
+            const membersTab = document.querySelector('#groupSettingsModal .invite-tab:nth-child(3)');
+            const inviteButton = document.querySelector('#groupSettingsModal .modal-btn.primary');
+            
+            if (role === 'owner' || role === 'admin') {
+                // Owners and admins can invite and see all tabs
+                inviteTab.style.display = 'block';
+                linkTab.style.display = 'block';
+                if (inviteButton) inviteButton.style.display = 'block';
+                // Default to members tab for all users
+                activeSettingsTab = 'members';
+            } else {
+                // Members can only view, no invite options
+                inviteTab.style.display = 'none';
+                linkTab.style.display = 'none';
+                if (inviteButton) inviteButton.style.display = 'none';
+                // Switch to members tab for regular members
+                activeSettingsTab = 'members';
+            }
+            
             document.getElementById('groupSettingsModal').classList.remove('hidden');
             
-            loadSettingsContacts();
-            loadGroupInviteLink(groupId);
+            // Load appropriate content based on role
+            if (role === 'owner' || role === 'admin') {
+                loadSettingsContacts();
+                loadGroupInviteLink(groupId);
+            }
+            // Always load group members for all users
+            loadGroupMembers(groupId);
+            
+            // Switch to members tab by default
+            switchSettingsTab('members');
         }
 
         function closeGroupSettings() {
             document.getElementById('groupSettingsModal').classList.add('hidden');
-            currentGroupId = null;
-            currentGroupRole = null;
             settingsSelectedContacts.clear();
             activeSettingsTab = 'contacts';
         }
@@ -1713,10 +1794,96 @@
         function switchSettingsTab(tab) {
             activeSettingsTab = tab;
             document.querySelectorAll('#groupSettingsModal .invite-tab').forEach(t => t.classList.remove('active'));
-            document.querySelector(`#groupSettingsModal .invite-tab:nth-child(${tab === 'contacts' ? '1' : '2'})`).classList.add('active');
+            
+            // Find and activate the correct tab
+            const tabs = document.querySelectorAll('#groupSettingsModal .invite-tab');
+            if (tab === 'contacts') tabs[0].classList.add('active');
+            else if (tab === 'link') tabs[1].classList.add('active');
+            else if (tab === 'members') tabs[2].classList.add('active');
             
             document.getElementById('settingsContactsTab').classList.toggle('hidden', tab !== 'contacts');
             document.getElementById('settingsLinkTab').classList.toggle('hidden', tab !== 'link');
+            document.getElementById('settingsMembersTab').classList.toggle('hidden', tab !== 'members');
+        }
+
+        async function loadGroupMembers(groupId) {
+            if (!authToken) return;
+            
+            const membersList = document.getElementById('groupMembersList');
+            membersList.innerHTML = '<div class="loading">👥 Loading members...</div>';
+            
+            try {
+                const response = await fetch(`/api/group_members/${groupId}`, {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
+                const data = await response.json();
+                
+                if (data.error) {
+                    membersList.innerHTML = '<div class="error">Failed to load members</div>';
+                    return;
+                }
+                
+                if (!Array.isArray(data) || data.length === 0) {
+                    membersList.innerHTML = '<div class="empty">No members found</div>';
+                    return;
+                }
+                
+                membersList.innerHTML = '';
+                data.forEach(member => {
+                    const memberItem = document.createElement('div');
+                    memberItem.className = 'contact-item';
+                    
+                    const roleIcon = member.role === 'owner' ? '👑' : member.role === 'admin' ? '🛡️' : '👤';
+                    const canRemove = currentGroupRole === 'owner' || (currentGroupRole === 'admin' && member.role === 'member');
+                    
+                    memberItem.innerHTML = `
+                        <div class="user-avatar" style="background: ${member.avatar_color || '#00a884'};">
+                            ${member.user_id.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="contact-info">
+                            <div class="contact-name">${member.user_id}</div>
+                            <div class="contact-status">${roleIcon} ${member.role}</div>
+                        </div>
+                        ${canRemove && member.user_id !== currentUser ? 
+                            `<button class="remove-member-btn" onclick="removeMember('${member.user_id}')" title="Remove Member">🗑️</button>` : 
+                            ''
+                        }
+                    `;
+                    membersList.appendChild(memberItem);
+                });
+            } catch (error) {
+                console.error('Load group members failed:', error);
+                membersList.innerHTML = '<div class="error">Failed to load members</div>';
+            }
+        }
+
+        async function removeMember(userId) {
+            if (!confirm(`Remove ${userId} from the group?`)) return;
+            
+            try {
+                const response = await fetch('/api/remove_member', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        group_id: currentGroupId,
+                        user_id: userId,
+                        remover_id: currentUser
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    alert('Failed to remove member: ' + data.error);
+                } else {
+                    loadGroupMembers(currentGroupId); // Reload members list
+                }
+            } catch (error) {
+                console.error('Remove member failed:', error);
+                alert('Failed to remove member');
+            }
         }
 
         async function loadSettingsContacts() {
@@ -1945,10 +2112,21 @@
             }
         }
 
-        async function startChatRoom(chatId, type, name) {
+        async function startChatRoom(chatId, type, name, groupData = null) {
             if (!chatId) { showWelcome(); return; }
             currentRoom = chatId; currentChatName = name; currentChatType = type;
             typingUsers.clear(); refreshTypingIndicator();
+            
+            // Store group data for settings button
+            if (type === 'group' && groupData) {
+                currentGroupId = groupData.id;
+                currentGroupName = groupData.name;
+                currentGroupRole = groupData.role;
+            } else {
+                currentGroupId = null;
+                currentGroupName = null;
+                currentGroupRole = null;
+            }
             
             // Mark room as read
             if (currentUser && chatId && authToken) {
@@ -1981,9 +2159,17 @@
                 createAvatar(name);
             
             // Show online status for direct messages
+            const groupSettingsBtn = document.getElementById('groupSettingsBtn');
             if (type === 'group') {
                 document.getElementById('chatStatus').textContent = `Group ID: ${chatId}`;
+                // Show settings button for all group members
+                if (groupData) {
+                    groupSettingsBtn.classList.remove('hidden');
+                } else {
+                    groupSettingsBtn.classList.add('hidden');
+                }
             } else {
+                groupSettingsBtn.classList.add('hidden');
                 // Get user status for direct messages
                 try {
                     const response = await fetch(`/api/user_status/${name}`, {
