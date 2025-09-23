@@ -1530,23 +1530,15 @@
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
                     chatItem.setAttribute('data-room-id', group.id);
-                    chatItem.style.position = 'relative';
-                    chatItem.onclick = (e) => {
-                        if (!e.target.closest('.group-settings-btn')) {
-                            startChatRoom(group.id, 'group', group.name, group);
-                        }
+                    chatItem.onclick = () => {
+                        startChatRoom(group.id, 'group', group.name, group);
                     };
                     chatItem.innerHTML = `
                         <div class="user-avatar" style="background: ${group.avatar_color || '#00a884'};">#</div>
                         <div class="chat-info">
                             <div class="chat-name">${group.name}</div>
-                            <div class="chat-preview">${group.role === 'owner' ? '👑 Owner' : group.role === 'admin' ? '🛡️ Admin' : '👤 Member'} • ${group.id}</div>
                         </div>
                         <div class="unread-badge">0</div>
-                        ${(group.role === 'owner' || group.role === 'admin') ? 
-                            `<button class="group-settings-btn" onclick="showGroupSettings(${group.id}, '${group.name}', '${group.role}')" title="Group Settings">⚙️</button>` : 
-                            ''
-                        }
                     `;
                     groupsList.appendChild(chatItem);
                 });
@@ -1835,13 +1827,14 @@
                     
                     const roleIcon = member.role === 'owner' ? '👑' : member.role === 'admin' ? '🛡️' : '👤';
                     const canRemove = currentGroupRole === 'owner' || (currentGroupRole === 'admin' && member.role === 'member');
+                    const displayName = member.user_id === currentUser ? 'You' : member.user_id;
                     
                     memberItem.innerHTML = `
                         <div class="user-avatar" style="background: ${member.avatar_color || '#00a884'};">
                             ${member.user_id.charAt(0).toUpperCase()}
                         </div>
                         <div class="contact-info">
-                            <div class="contact-name">${member.user_id}</div>
+                            <div class="contact-name">${displayName}</div>
                             <div class="contact-status">${roleIcon} ${member.role}</div>
                         </div>
                         ${canRemove && member.user_id !== currentUser ? 
