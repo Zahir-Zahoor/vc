@@ -154,17 +154,14 @@ def get_recent_chats(user_id):
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Get recent direct message conversations
-        query_param1 = f'direct_{user_id}_%'
-        query_param2 = f'direct_%_{user_id}'
-        print(f"Query params: {query_param1}, {query_param2}")
-        
+        # Get recent conversations (both DM and group chats)
         cur.execute("""
-            SELECT DISTINCT room_id
+            SELECT DISTINCT room_id, MAX(timestamp) as last_time
             FROM messages 
-            WHERE room_id LIKE %s OR room_id LIKE %s
-            ORDER BY room_id
-        """, (query_param1, query_param2))
+            WHERE room_id LIKE %s OR room_id LIKE %s OR user_id = %s
+            GROUP BY room_id
+            ORDER BY last_time DESC
+        """, (f'dm_{user_id}_%', f'dm_%_{user_id}', user_id))
         
         rows = cur.fetchall()
         print(f"Found {len(rows)} rooms: {rows}")
@@ -174,37 +171,41 @@ def get_recent_chats(user_id):
             room_id = row[0]
             print(f"Processing room: {room_id}")
             
-            # Extract other user from room_id
-            if room_id.startswith('direct_'):
-                users_part = room_id[7:]  # Remove 'direct_' prefix
-                print(f"Users part: {users_part}")
-                
-                # Find the other user
-                other_user = None
-                if users_part.startswith(user_id + '_'):
-                    other_user = users_part[len(user_id) + 1:]
-                elif users_part.endswith('_' + user_id):
-                    other_user = users_part[:-len(user_id) - 1]
-                
-                print(f"Other user: {other_user}")
-                
-                if other_user:
-                    # Get latest message
-                    cur.execute("SELECT message, timestamp FROM messages WHERE room_id = %s ORDER BY timestamp DESC LIMIT 1", (room_id,))
-                    msg_result = cur.fetchone()
-                    
-                    # Get user avatar color
+            # Handle different room_id formats
+            if room_id.startswith('dm_'):
+                # Direct message format: dm_user1_user2
+                users_part = room_id[3:]  # Remove 'dm_' prefix
+                users = users_part.split('_')
+                other_user = users[1] if users[0] == user_id else users[0]
+                chat_type = 'direct'
+            else:
+                # Group chat (numeric room_id)
+                other_user = f"Group {room_id}"
+                chat_type = 'group'
+            
+            print(f"Other user/Group: {other_user}")
+            
+            # Get latest message
+            cur.execute("SELECT user_id, message, timestamp FROM messages WHERE room_id = %s ORDER BY timestamp DESC LIMIT 1", (room_id,))
+            msg_result = cur.fetchone()
+            
+            if msg_result:
+                # Get user avatar color for direct chats
+                avatar_color = '#00a884'  # Default
+                if chat_type == 'direct':
                     cur.execute("SELECT avatar_color FROM users WHERE user_id = %s", (other_user,))
                     avatar_result = cur.fetchone()
                     avatar_color = avatar_result[0] if avatar_result else '#00a884'
-                    
-                    chats.append({
-                        'other_user': other_user,
-                        'room_id': room_id,
-                        'last_message_time': msg_result[1] if msg_result else None,
-                        'last_message': msg_result[0] if msg_result else 'No messages yet',
-                        'avatar_color': avatar_color
-                    })
+                
+                chats.append({
+                    'other_user': other_user,
+                    'room_id': room_id,
+                    'chat_type': chat_type,
+                    'last_message_time': msg_result[2],
+                    'last_message': msg_result[1],
+                    'last_message_user': msg_result[0],
+                    'avatar_color': avatar_color
+                })
         
         print(f"Final chats: {chats}")
         
