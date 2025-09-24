@@ -763,6 +763,24 @@
                 <small>When enabled, new members must be approved before joining</small>
             </div>
             
+            <div class="settings-section">
+                <h4>👥 Add Members (Optional)</h4>
+                <div class="invite-tabs">
+                    <button class="invite-tab active" onclick="switchCreateTab('contacts')">From Contacts</button>
+                    <button class="invite-tab" onclick="switchCreateTab('link')">Share Link</button>
+                </div>
+                
+                <div id="createContactsTab" class="create-tab-content">
+                    <div id="contactsForInvite" class="contacts-list">
+                        <div class="loading">Loading contacts...</div>
+                    </div>
+                </div>
+                
+                <div id="createLinkTab" class="create-tab-content hidden">
+                    <p>Group link will be generated after creation</p>
+                </div>
+            </div>
+            
             <div class="modal-actions">
                 <button class="modal-btn secondary" onclick="closeCreateGroupModal()">Cancel</button>
                 <button class="modal-btn primary" onclick="createNewGroup()">
