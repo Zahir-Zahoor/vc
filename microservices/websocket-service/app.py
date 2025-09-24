@@ -5,12 +5,16 @@ import json
 import logging
 import requests
 import os
+from kafka import KafkaConsumer
+import threading
+import time
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 MESSAGING_SERVICE_URL = os.getenv('MESSAGING_SERVICE_URL', 'http://messaging-service:5000')
+KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
 
 try:
     redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
@@ -23,6 +27,51 @@ except:
 # In-memory storage as fallback
 rooms = {}
 user_sockets = {}
+
+def process_websocket_delivery():
+    """Kafka consumer for real-time message delivery"""
+    max_retries = 10
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            consumer = KafkaConsumer(
+                'websocket-delivery',
+                bootstrap_servers=[KAFKA_BOOTSTRAP_SERVERS],
+                value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+                group_id='websocket-service'
+            )
+            print("✅ WebSocket Kafka consumer connected")
+            
+            for message in consumer:
+                try:
+                    msg_data = message.value
+                    room_id = str(msg_data['room_id'])
+                    
+                    print(f"📤 Delivering message to room {room_id}")
+                    
+                    # Emit to all users in room
+                    socketio.emit('receive_message', {
+                        'room_id': room_id,
+                        'user_id': msg_data['user_id'],
+                        'message': msg_data['message'],
+                        'timestamp': msg_data['timestamp'],
+                        'delivery_status': msg_data['delivery_status']
+                    }, room=room_id)
+                    
+                except Exception as e:
+                    print(f"❌ Error delivering message: {e}")
+                    
+        except Exception as e:
+            retry_count += 1
+            print(f"❌ WebSocket Kafka consumer connection attempt {retry_count}/{max_retries} failed: {e}")
+            time.sleep(5)
+    
+    print("❌ Failed to connect WebSocket Kafka consumer after all retries")
+
+# Start Kafka consumer in background thread
+delivery_thread = threading.Thread(target=process_websocket_delivery, daemon=True)
+delivery_thread.start()
 
 @app.route('/health')
 def health():
@@ -96,22 +145,29 @@ def on_send_message(data):
     message = data['message']
     timestamp = data['timestamp']
     
-    # Emit to all users in room
-    emit('receive_message', {
-        'room_id': room_id,
-        'user_id': user_id,
-        'message': message,
-        'timestamp': timestamp,
-        'delivery_status': 'delivered'
-    }, room=room_id)
+    print(f'📨 Received message from {user_id} for room {room_id}')
     
-    # Mark as delivered for sender
-    emit('message_delivered', {
-        'timestamp': timestamp,
-        'status': 'delivered'
-    })
-    
-    print(f'Message sent in room {room_id} by {user_id}')
+    # Send to messaging service (which will queue in Kafka)
+    try:
+        response = requests.post(f'{MESSAGING_SERVICE_URL}/send_message', json={
+            'room_id': room_id,
+            'user_id': user_id,
+            'message': message,
+            'timestamp': timestamp
+        })
+        
+        if response.status_code == 200:
+            # Acknowledge to sender that message is queued
+            emit('message_delivered', {
+                'timestamp': timestamp,
+                'status': 'queued'
+            })
+            print(f'✅ Message queued successfully')
+        else:
+            print(f'❌ Failed to queue message: {response.status_code}')
+            
+    except Exception as e:
+        print(f'❌ Error sending to messaging service: {e}')
 
 @socketio.on('message_read')
 def on_message_read(data):

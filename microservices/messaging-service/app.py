@@ -3,13 +3,145 @@ import psycopg2
 import os
 from datetime import datetime
 import traceback
+import json
+from kafka import KafkaProducer, KafkaConsumer
+import threading
+import time
 
 app = Flask(__name__)
 
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://chat:password@postgres:5432/chatapp')
+KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092')
+
+# Initialize Kafka producer with retry logic
+producer = None
+def init_kafka_producer():
+    global producer
+    max_retries = 10
+    retry_count = 0
+    
+    while retry_count < max_retries and producer is None:
+        try:
+            producer = KafkaProducer(
+                bootstrap_servers=[KAFKA_BOOTSTRAP_SERVERS],
+                value_serializer=lambda x: json.dumps(x).encode('utf-8')
+            )
+            print("✅ Connected to Kafka")
+            break
+        except Exception as e:
+            retry_count += 1
+            print(f"❌ Kafka connection attempt {retry_count}/{max_retries} failed: {e}")
+            time.sleep(5)
+    
+    if producer is None:
+        print("❌ Failed to connect to Kafka after all retries")
+
+# Initialize Kafka in background thread
+kafka_thread = threading.Thread(target=init_kafka_producer, daemon=True)
+kafka_thread.start()
 
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL)
+
+def process_kafka_messages():
+    """Kafka consumer to process incoming messages"""
+    max_retries = 10
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            consumer = KafkaConsumer(
+                'chat-messages',
+                bootstrap_servers=[KAFKA_BOOTSTRAP_SERVERS],
+                value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+                group_id='messaging-service'
+            )
+            print("✅ Kafka consumer connected")
+            
+            for message in consumer:
+                try:
+                    msg_data = message.value
+                    print(f"Processing Kafka message: {msg_data}")
+                    
+                    room_id = msg_data['room_id']
+                    user_id = msg_data['user_id']
+                    message_text = msg_data['message']
+                    timestamp = msg_data['timestamp']
+                    
+                    # Store message in database
+                    conn = get_db_connection()
+                    cur = conn.cursor()
+                    
+                    # Insert message
+                    cur.execute(
+                        "INSERT INTO messages (room_id, user_id, message, timestamp, delivery_status) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                        (room_id, user_id, message_text, timestamp, 'delivered')
+                    )
+                    message_id = cur.fetchone()[0]
+                    
+                    # Add unread entries for recipients
+                    if str(room_id).startswith('direct_'):
+                        # Direct message - extract other user
+                        users_part = str(room_id)[7:]
+                        other_user = None
+                        if users_part.startswith(user_id + '_'):
+                            other_user = users_part[len(user_id) + 1:]
+                        elif users_part.endswith('_' + user_id):
+                            other_user = users_part[:-len(user_id) - 1]
+                        
+                        if other_user:
+                            cur.execute(
+                                "INSERT INTO unread_messages (user_id, room_id, message_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                                (other_user, room_id, message_id)
+                            )
+                    else:
+                        # Group message - add unread for all members except sender
+                        try:
+                            group_id = int(room_id)
+                            cur.execute(
+                                "SELECT user_id FROM group_members WHERE group_id = %s AND user_id != %s",
+                                (group_id, user_id)
+                            )
+                            members = cur.fetchall()
+                            
+                            for (member_user_id,) in members:
+                                cur.execute(
+                                    "INSERT INTO unread_messages (user_id, room_id, message_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                                    (member_user_id, room_id, message_id)
+                                )
+                        except ValueError:
+                            pass
+                    
+                    conn.commit()
+                    cur.close()
+                    conn.close()
+                    
+                    # Publish to websocket topic for real-time delivery
+                    if producer:
+                        producer.send('websocket-delivery', {
+                            'room_id': room_id,
+                            'user_id': user_id,
+                            'message': message_text,
+                            'timestamp': timestamp,
+                            'delivery_status': 'delivered'
+                        })
+                    
+                    print(f"✅ Message stored and queued for delivery")
+                    
+                except Exception as e:
+                    print(f"❌ Error processing message: {e}")
+                    traceback.print_exc()
+                    
+        except Exception as e:
+            retry_count += 1
+            print(f"❌ Kafka consumer connection attempt {retry_count}/{max_retries} failed: {e}")
+            time.sleep(5)
+    
+    print("❌ Failed to connect Kafka consumer after all retries")
+
+# Start Kafka consumer in background thread
+consumer_thread = threading.Thread(target=process_kafka_messages, daemon=True)
+consumer_thread.start()
 
 @app.route('/health')
 def health():
@@ -96,83 +228,35 @@ def send_message():
         user_id = data['user_id']
         message = data['message']
         timestamp = data['timestamp']
-        delivery_status = data.get('delivery_status', 'sent')
         
-        print(f"send_message called: room_id={room_id}, user_id={user_id}")
+        print(f"Sending message to Kafka: {user_id} -> {room_id}")
         
-        conn = get_db_connection()
-        cur = conn.cursor()
+        if producer is None:
+            print("❌ Kafka producer not ready, falling back to direct storage")
+            # Fallback to direct database storage
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO messages (room_id, user_id, message, timestamp, delivery_status) VALUES (%s, %s, %s, %s, %s)",
+                (room_id, user_id, message, timestamp, 'delivered')
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
+            return jsonify({'status': 'stored_direct', 'timestamp': timestamp})
         
-        # Insert message
-        cur.execute(
-            "INSERT INTO messages (room_id, user_id, message, timestamp, delivery_status) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-            (room_id, user_id, message, timestamp, delivery_status)
-        )
-        message_id = cur.fetchone()[0]
-        print(f"Message inserted with ID: {message_id}")
+        # Send to Kafka for reliable processing
+        producer.send('chat-messages', {
+            'room_id': room_id,
+            'user_id': user_id,
+            'message': message,
+            'timestamp': timestamp
+        })
         
-        # Add unread entries for all room members except sender
-        if str(room_id).startswith('direct_'):
-            print("Processing direct message")
-            # Direct message - extract other user properly
-            users_part = str(room_id)[7:]  # Remove 'direct_' prefix
-            
-            # Find the other user by checking which part matches current user
-            other_user = None
-            if users_part.startswith(user_id + '_'):
-                other_user = users_part[len(user_id) + 1:]
-            elif users_part.endswith('_' + user_id):
-                other_user = users_part[:-len(user_id) - 1]
-            
-            if other_user:
-                cur.execute(
-                    "INSERT INTO unread_messages (user_id, room_id, message_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-                    (other_user, room_id, message_id)
-                )
-                print(f"Added unread for direct user: {other_user}")
-            else:
-                print(f"Could not determine other user from room_id: {room_id}")
-        else:
-            print(f"Processing group message for group_id: {room_id}")
-            # Group message - add unread for all group members except sender
-            # Convert room_id to integer for group lookup
-            try:
-                group_id = int(room_id)
-                print(f"Looking up members for group_id: {group_id}")
-                cur.execute(
-                    "SELECT user_id FROM group_members WHERE group_id = %s AND user_id != %s",
-                    (group_id, user_id)
-                )
-                members = cur.fetchall()
-                print(f"Found {len(members)} group members: {members}")
-                
-                for (member_user_id,) in members:
-                    cur.execute(
-                        "INSERT INTO unread_messages (user_id, room_id, message_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-                        (member_user_id, room_id, message_id)
-                    )
-                    print(f"Added unread for group member: {member_user_id}")
-            except ValueError as e:
-                print(f"Error converting room_id to int: {e}")
-                # If room_id is not a valid integer, skip unread tracking
-                pass
-        
-        conn.commit()
-        cur.close()
-        conn.close()
-        
-        print("send_message completed successfully")
-        return jsonify({'status': 'sent', 'timestamp': timestamp})
+        return jsonify({'status': 'queued', 'timestamp': timestamp})
         
     except Exception as e:
-        print(f"Error in send_message: {e}")
-        print(traceback.format_exc())
-        try:
-            if 'conn' in locals():
-                conn.rollback()
-                conn.close()
-        except:
-            pass
+        print(f"Error sending message: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/mark_read', methods=['POST'])

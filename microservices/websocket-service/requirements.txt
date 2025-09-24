@@ -2,3 +2,4 @@ flask==2.3.3
 flask-socketio==5.3.6
 redis==4.6.0
 requests==2.31.0
+kafka-python==2.0.2

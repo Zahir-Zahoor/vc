@@ -30,14 +30,16 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: wurstmeister/kafka:latest
     depends_on:
       - zookeeper
+    ports:
+      - "9092:9092"
     environment:
-      KAFKA_BROKER_ID: 1
+      KAFKA_ADVERTISED_HOST_NAME: kafka
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_CREATE_TOPICS: "chat-messages:3:1,websocket-delivery:3:1"
 
   # Core Services
   auth-service:
@@ -71,6 +73,7 @@ services:
       MESSAGING_SERVICE_URL: http://messaging-service:5000
       AUTH_SERVICE_URL: http://auth-service:5000
       REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
       - redis
       - kafka
@@ -81,8 +84,10 @@ services:
       - "5002:5000"
     environment:
       DATABASE_URL: postgresql://chat:password@postgres:5432/chatapp
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     depends_on:
       - postgres
+      - kafka
 
   group-service:
     build: ./group-service
