@@ -319,5 +319,53 @@ def remove_member():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/group_join_requests/<group_id>')
+def get_group_join_requests(group_id):
+    try:
+        response = requests.get(f'{GROUP_SERVICE_URL}/group_join_requests/{group_id}')
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/approve_join_request', methods=['POST'])
+def approve_join_request():
+    try:
+        response = requests.post(f'{GROUP_SERVICE_URL}/approve_join_request', json=request.json)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/reject_join_request', methods=['POST'])
+def reject_join_request():
+    try:
+        response = requests.post(f'{GROUP_SERVICE_URL}/reject_join_request', json=request.json)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/user_invites/<user_id>')
+def get_user_invites(user_id):
+    try:
+        response = requests.get(f'{GROUP_SERVICE_URL}/user_invites/{user_id}')
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/accept_group_invite', methods=['POST'])
+def accept_group_invite():
+    try:
+        response = requests.post(f'{GROUP_SERVICE_URL}/accept_invite', json=request.json)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/decline_group_invite', methods=['POST'])
+def decline_group_invite():
+    try:
+        response = requests.post(f'{GROUP_SERVICE_URL}/decline_invite', json=request.json)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

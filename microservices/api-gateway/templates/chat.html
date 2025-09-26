@@ -1345,9 +1345,20 @@
             if (!currentUser || !authToken) return;
             
             try {
-                const response = await fetch(`/api/invites?type=${activeInviteTab}`, {
-                    headers: {'Authorization': `Bearer ${authToken}`}
-                });
+                let response;
+                if (activeInviteTab === 'received') {
+                    // Load group invites for the user
+                    response = await fetch(`/api/user_invites/${currentUser}`, {
+                        headers: {'Authorization': `Bearer ${authToken}`}
+                    });
+                } else {
+                    // For sent invites, we'd need a different endpoint
+                    // For now, show empty
+                    const container = document.getElementById('sentInvites');
+                    container.innerHTML = `<div style="padding: 20px; text-align: center; color: #8696a0;">Sent invites not implemented yet</div>`;
+                    return;
+                }
+                
                 const invites = await response.json();
 
                 const containerId = activeInviteTab === 'received' ? 'receivedInvites' : 'sentInvites';
@@ -1359,31 +1370,25 @@
                 }
 
                 container.innerHTML = invites.map(invite => {
-                    const otherUser = invite.other_user_id;
+                    const otherUser = invite.from_user_id;
                     const timeAgo = formatTimestamp(new Date(invite.created_at));
                     
                     return `
                         <div class="invite-item">
                             <div class="invite-header">
-                                ${createAvatar(otherUser)}
+                                ${createAvatar(otherUser, invite.inviter_avatar_color)}
                                 <div class="invite-info">
                                     <div class="invite-from">${otherUser}</div>
-                                    <div class="invite-type">${invite.other_user_email}</div>
+                                    <div class="invite-type">Group: ${invite.group_name}</div>
                                 </div>
-                                <div class="invite-status ${invite.status}">${invite.status}</div>
+                                <div class="invite-status pending">pending</div>
                             </div>
                             ${invite.message ? `<div class="invite-message">"${invite.message}"</div>` : ''}
                             <div class="invite-time">${timeAgo}</div>
-                            ${invite.status === 'pending' ? `
-                                <div class="invite-actions">
-                                    ${activeInviteTab === 'received' ? `
-                                        <button class="invite-btn accept" onclick="respondToInvite(${invite.id}, 'accept')">Accept</button>
-                                        <button class="invite-btn reject" onclick="respondToInvite(${invite.id}, 'reject')">Decline</button>
-                                    ` : `
-                                        <button class="invite-btn cancel" onclick="cancelInvite(${invite.id})">Cancel</button>
-                                    `}
-                                </div>
-                            ` : ''}
+                            <div class="invite-actions">
+                                <button class="invite-btn accept" onclick="respondToGroupInvite(${invite.invite_id}, 'accept')">Accept</button>
+                                <button class="invite-btn reject" onclick="respondToGroupInvite(${invite.invite_id}, 'decline')">Decline</button>
+                            </div>
                         </div>
                     `;
                 }).join('');
@@ -1391,6 +1396,43 @@
                 console.error('Load invites failed:', error);
                 const containerId = activeInviteTab === 'received' ? 'receivedInvites' : 'sentInvites';
                 document.getElementById(containerId).innerHTML = '<div style="padding: 20px; text-align: center; color: #f44336;">Failed to load invites</div>';
+            }
+        }
+
+        async function respondToGroupInvite(inviteId, action) {
+            try {
+                const endpoint = action === 'accept' ? '/api/accept_group_invite' : '/api/decline_group_invite';
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: JSON.stringify({
+                        invite_id: inviteId,
+                        user_id: currentUser
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    if (action === 'accept') {
+                        alert(`✅ ${result.message}`);
+                        // Refresh groups if we're on that tab
+                        if (activeTab === 'groups') {
+                            loadMyGroups();
+                        }
+                    } else {
+                        alert(`❌ ${result.message}`);
+                    }
+                    loadInvites(); // Refresh invites
+                } else {
+                    alert(result.error || `Failed to ${action} invite`);
+                }
+            } catch (error) {
+                console.error(`${action} group invite failed:`, error);
+                alert(`Failed to ${action} invite. Please try again.`);
             }
         }
 

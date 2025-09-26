@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import psycopg2
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
@@ -205,7 +205,25 @@ def join_by_link():
             return jsonify({'error': 'User is already a member'}), 400
         
         if require_approval:
-            # Add as pending member (you might want to implement a pending_members table)
+            # Check if there's already a pending request
+            cur.execute("SELECT status FROM group_join_requests WHERE group_id = %s AND user_id = %s", (group_id, user_id))
+            existing_request = cur.fetchone()
+            
+            if existing_request:
+                if existing_request[0] == 'pending':
+                    return jsonify({'message': 'Join request already pending approval', 'group_name': group_name})
+                elif existing_request[0] == 'rejected':
+                    return jsonify({'error': 'Previous join request was rejected', 'group_name': group_name}), 403
+            
+            # Create new join request
+            cur.execute("""
+                INSERT INTO group_join_requests (group_id, user_id, status, created_at)
+                VALUES (%s, %s, 'pending', %s)
+                ON CONFLICT (group_id, user_id) 
+                DO UPDATE SET status = 'pending', created_at = %s
+            """, (group_id, user_id, datetime.now(), datetime.now()))
+            
+            conn.commit()
             return jsonify({'message': 'Join request sent for approval', 'group_name': group_name})
         else:
             # Add directly as member
@@ -249,17 +267,37 @@ def invite_users():
         
         for user_id in user_ids:
             try:
+                # Check if user exists
+                cur.execute("SELECT user_id FROM users WHERE user_id = %s", (user_id,))
+                if not cur.fetchone():
+                    failed_invites.append(f"{user_id} does not exist")
+                    continue
+                
                 # Check if user is already a member
                 cur.execute("SELECT role FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
                 if cur.fetchone():
                     failed_invites.append(f"{user_id} is already a member")
                     continue
                 
-                # Add user as member
+                # Check if there's already a pending invite
                 cur.execute("""
-                    INSERT INTO group_members (group_id, user_id, role, joined_at)
-                    VALUES (%s, %s, 'member', %s)
-                """, (group_id, user_id, datetime.now()))
+                    SELECT status FROM invites 
+                    WHERE from_user_id = %s AND to_user_id = %s 
+                    AND invite_type = 'group' AND target_id = %s 
+                    AND status = 'pending'
+                """, (inviter_id, user_id, str(group_id)))
+                
+                if cur.fetchone():
+                    failed_invites.append(f"{user_id} already has a pending invite")
+                    continue
+                
+                # Create invite instead of adding directly
+                now = datetime.utcnow()
+                expires = now + timedelta(days=7)
+                cur.execute("""
+                    INSERT INTO invites (from_user_id, to_user_id, invite_type, target_id, message, created_at, expires_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (inviter_id, user_id, 'group', str(group_id), data.get('message', ''), now, expires))
                 
                 successful_invites.append(user_id)
                 
@@ -268,7 +306,7 @@ def invite_users():
         
         conn.commit()
         
-        message = f"Successfully invited {len(successful_invites)} users"
+        message = f"Successfully sent {len(successful_invites)} invites"
         if failed_invites:
             message += f". {len(failed_invites)} failed"
         
@@ -352,6 +390,288 @@ def remove_member():
         
         conn.commit()
         return jsonify({'message': 'Member removed successfully'})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/group_join_requests/<group_id>')
+def get_join_requests(group_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT gjr.id, gjr.user_id, gjr.created_at, u.avatar_color
+            FROM group_join_requests gjr
+            JOIN users u ON gjr.user_id = u.user_id
+            WHERE gjr.group_id = %s AND gjr.status = 'pending'
+            ORDER BY gjr.created_at DESC
+        """, (group_id,))
+        
+        requests = []
+        for row in cur.fetchall():
+            requests.append({
+                'request_id': row[0],
+                'user_id': row[1],
+                'created_at': row[2].isoformat(),
+                'avatar_color': row[3]
+            })
+        
+        return jsonify(requests)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/approve_join_request', methods=['POST'])
+def approve_join_request():
+    data = request.json
+    request_id = data.get('request_id')
+    approver_id = data.get('approver_id')
+    
+    if not request_id or not approver_id:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get request details
+        cur.execute("""
+            SELECT gjr.group_id, gjr.user_id, g.name
+            FROM group_join_requests gjr
+            JOIN groups g ON gjr.group_id = g.id
+            WHERE gjr.id = %s AND gjr.status = 'pending'
+        """, (request_id,))
+        
+        request_info = cur.fetchone()
+        if not request_info:
+            return jsonify({'error': 'Request not found or already processed'}), 404
+        
+        group_id, user_id, group_name = request_info
+        
+        # Check if approver has permission
+        cur.execute("SELECT role FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, approver_id))
+        approver_role = cur.fetchone()
+        
+        if not approver_role or approver_role[0] not in ['owner', 'admin']:
+            return jsonify({'error': 'Insufficient permissions'}), 403
+        
+        # Add user to group
+        cur.execute("""
+            INSERT INTO group_members (group_id, user_id, role, joined_at)
+            VALUES (%s, %s, 'member', %s)
+        """, (group_id, user_id, datetime.now()))
+        
+        # Update request status
+        cur.execute("""
+            UPDATE group_join_requests 
+            SET status = 'approved', updated_at = %s
+            WHERE id = %s
+        """, (datetime.now(), request_id))
+        
+        conn.commit()
+        return jsonify({'message': f'User {user_id} approved to join {group_name}'})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/reject_join_request', methods=['POST'])
+def reject_join_request():
+    data = request.json
+    request_id = data.get('request_id')
+    rejector_id = data.get('rejector_id')
+    
+    if not request_id or not rejector_id:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get request details
+        cur.execute("""
+            SELECT gjr.group_id, gjr.user_id
+            FROM group_join_requests gjr
+            WHERE gjr.id = %s AND gjr.status = 'pending'
+        """, (request_id,))
+        
+        request_info = cur.fetchone()
+        if not request_info:
+            return jsonify({'error': 'Request not found or already processed'}), 404
+        
+        group_id, user_id = request_info
+        
+        # Check if rejector has permission
+        cur.execute("SELECT role FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, rejector_id))
+        rejector_role = cur.fetchone()
+        
+        if not rejector_role or rejector_role[0] not in ['owner', 'admin']:
+            return jsonify({'error': 'Insufficient permissions'}), 403
+        
+        # Update request status
+        cur.execute("""
+            UPDATE group_join_requests 
+            SET status = 'rejected', updated_at = %s
+            WHERE id = %s
+        """, (datetime.now(), request_id))
+        
+        conn.commit()
+        return jsonify({'message': f'Join request from {user_id} rejected'})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/user_invites/<user_id>')
+def get_user_invites(user_id):
+    """Get pending invites for a user"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT i.id, i.from_user_id, i.target_id, i.message, i.created_at, i.expires_at, g.name as group_name, u.avatar_color
+            FROM invites i
+            JOIN groups g ON i.target_id = g.id::text
+            JOIN users u ON i.from_user_id = u.user_id
+            WHERE i.to_user_id = %s AND i.invite_type = 'group' AND i.status = 'pending'
+            AND i.expires_at > %s
+            ORDER BY i.created_at DESC
+        """, (user_id, datetime.utcnow()))
+        
+        invites = []
+        for row in cur.fetchall():
+            invite_message = f"Invitation to join group {row[6]} from {row[1]}"
+            if row[3]:  # If there's a custom message
+                invite_message += f": {row[3]}"
+            
+            invites.append({
+                'invite_id': row[0],
+                'from_user_id': row[1],
+                'group_id': int(row[2]),
+                'group_name': row[6],
+                'message': invite_message,
+                'custom_message': row[3],
+                'created_at': row[4].isoformat(),
+                'expires_at': row[5].isoformat(),
+                'inviter_avatar_color': row[7]
+            })
+        
+        return jsonify(invites)
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/accept_invite', methods=['POST'])
+def accept_invite():
+    """Accept a group invite"""
+    data = request.json
+    invite_id = data.get('invite_id')
+    user_id = data.get('user_id')
+    
+    if not invite_id or not user_id:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get invite details
+        cur.execute("""
+            SELECT i.target_id, i.to_user_id, g.name
+            FROM invites i
+            JOIN groups g ON i.target_id = g.id::text
+            WHERE i.id = %s AND i.status = 'pending' AND i.expires_at > %s
+        """, (invite_id, datetime.now()))
+        
+        invite_info = cur.fetchone()
+        if not invite_info:
+            return jsonify({'error': 'Invite not found or expired'}), 404
+        
+        group_id, invited_user_id, group_name = invite_info
+        
+        # Verify user is the invited user
+        if invited_user_id != user_id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        # Check if user is already a member
+        cur.execute("SELECT role FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
+        if cur.fetchone():
+            return jsonify({'error': 'Already a member of this group'}), 400
+        
+        # Add user to group
+        cur.execute("""
+            INSERT INTO group_members (group_id, user_id, role, joined_at)
+            VALUES (%s, %s, 'member', %s)
+        """, (group_id, user_id, datetime.now()))
+        
+        # Update invite status
+        cur.execute("""
+            UPDATE invites SET status = 'accepted' WHERE id = %s
+        """, (invite_id,))
+        
+        conn.commit()
+        return jsonify({'message': f'Successfully joined {group_name}', 'group_id': int(group_id)})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@app.route('/decline_invite', methods=['POST'])
+def decline_invite():
+    """Decline a group invite"""
+    data = request.json
+    invite_id = data.get('invite_id')
+    user_id = data.get('user_id')
+    
+    if not invite_id or not user_id:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get invite details
+        cur.execute("""
+            SELECT i.to_user_id, g.name
+            FROM invites i
+            JOIN groups g ON i.target_id = g.id::text
+            WHERE i.id = %s AND i.status = 'pending'
+        """, (invite_id,))
+        
+        invite_info = cur.fetchone()
+        if not invite_info:
+            return jsonify({'error': 'Invite not found'}), 404
+        
+        invited_user_id, group_name = invite_info
+        
+        # Verify user is the invited user
+        if invited_user_id != user_id:
+            return jsonify({'error': 'Unauthorized'}), 403
+        
+        # Update invite status
+        cur.execute("""
+            UPDATE invites SET status = 'declined' WHERE id = %s
+        """, (invite_id,))
+        
+        conn.commit()
+        return jsonify({'message': f'Declined invite to {group_name}'})
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
