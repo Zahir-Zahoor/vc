@@ -590,9 +590,9 @@ def accept_invite():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Get invite details
+        # Get invite details including inviter
         cur.execute("""
-            SELECT i.target_id, i.to_user_id, g.name
+            SELECT i.target_id, i.to_user_id, i.from_user_id, g.name
             FROM invites i
             JOIN groups g ON i.target_id = g.id::text
             WHERE i.id = %s AND i.status = 'pending' AND i.expires_at > %s
@@ -602,7 +602,7 @@ def accept_invite():
         if not invite_info:
             return jsonify({'error': 'Invite not found or expired'}), 404
         
-        group_id, invited_user_id, group_name = invite_info
+        group_id, invited_user_id, from_user_id, group_name = invite_info
         
         # Verify user is the invited user
         if invited_user_id != user_id:
@@ -619,12 +619,35 @@ def accept_invite():
             VALUES (%s, %s, 'member', %s)
         """, (group_id, user_id, datetime.now()))
         
-        # Update invite status
-        cur.execute("""
-            UPDATE invites SET status = 'accepted' WHERE id = %s
-        """, (invite_id,))
+        # Delete invite permanently instead of updating status
+        cur.execute("DELETE FROM invites WHERE id = %s", (invite_id,))
         
         conn.commit()
+        
+        # Send notification to inviter (Redis notification)
+        try:
+            import redis
+            import json
+            redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+            notification_msg = f"{user_id} accepted your invite to join {group_name}"
+            redis_client.publish(f"user_notifications:{from_user_id}", json.dumps({
+                'type': 'group_invite_accepted',
+                'from_user_id': user_id,
+                'group_name': group_name,
+                'group_id': int(group_id),
+                'message': notification_msg
+            }))
+            
+            # Send invite status update
+            redis_client.publish(f"user_notifications:{from_user_id}", json.dumps({
+                'type': 'invite_status_update',
+                'invite_id': invite_id,
+                'status': 'accepted',
+                'invite_type': 'group'
+            }))
+        except Exception as e:
+            print(f"Failed to send notification: {e}")
+        
         return jsonify({'message': f'Successfully joined {group_name}', 'group_id': int(group_id)})
         
     except Exception as e:
@@ -647,9 +670,9 @@ def decline_invite():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Get invite details
+        # Get invite details including inviter
         cur.execute("""
-            SELECT i.to_user_id, g.name
+            SELECT i.to_user_id, i.from_user_id, g.name
             FROM invites i
             JOIN groups g ON i.target_id = g.id::text
             WHERE i.id = %s AND i.status = 'pending'
@@ -659,18 +682,40 @@ def decline_invite():
         if not invite_info:
             return jsonify({'error': 'Invite not found'}), 404
         
-        invited_user_id, group_name = invite_info
+        invited_user_id, from_user_id, group_name = invite_info
         
         # Verify user is the invited user
         if invited_user_id != user_id:
             return jsonify({'error': 'Unauthorized'}), 403
         
-        # Update invite status
-        cur.execute("""
-            UPDATE invites SET status = 'declined' WHERE id = %s
-        """, (invite_id,))
+        # Delete invite permanently instead of updating status
+        cur.execute("DELETE FROM invites WHERE id = %s", (invite_id,))
         
         conn.commit()
+        
+        # Send notification to inviter
+        try:
+            import redis
+            import json
+            redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+            notification_msg = f"{user_id} declined your invite to join {group_name}"
+            redis_client.publish(f"user_notifications:{from_user_id}", json.dumps({
+                'type': 'group_invite_declined',
+                'from_user_id': user_id,
+                'group_name': group_name,
+                'message': notification_msg
+            }))
+            
+            # Send invite status update
+            redis_client.publish(f"user_notifications:{from_user_id}", json.dumps({
+                'type': 'invite_status_update',
+                'invite_id': invite_id,
+                'status': 'declined',
+                'invite_type': 'group'
+            }))
+        except Exception as e:
+            print(f"Failed to send notification: {e}")
+        
         return jsonify({'message': f'Declined invite to {group_name}'})
         
     except Exception as e:

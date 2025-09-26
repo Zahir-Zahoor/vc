@@ -28,6 +28,44 @@ except:
 rooms = {}
 user_sockets = {}
 
+def process_redis_notifications():
+    """Redis subscriber for user notifications"""
+    if not redis_client:
+        print("❌ Redis not available, notifications disabled")
+        return
+        
+    max_retries = 10
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            pubsub = redis_client.pubsub()
+            pubsub.psubscribe('user_notifications:*')
+            print("✅ Redis notification subscriber connected")
+            
+            for message in pubsub.listen():
+                try:
+                    if message['type'] == 'pmessage':
+                        channel = message['channel']
+                        user_id = channel.split(':')[1]  # Extract user_id from channel
+                        notification_data = json.loads(message['data'])
+                        
+                        print(f"📢 Sending notification to user {user_id}: {notification_data['message']}")
+                        
+                        # Send notification to specific user if they're connected
+                        if user_id in user_sockets:
+                            socketio.emit('notification', notification_data, room=user_sockets[user_id])
+                        
+                except Exception as e:
+                    print(f"❌ Error processing notification: {e}")
+                    
+        except Exception as e:
+            retry_count += 1
+            print(f"❌ Redis notification subscriber connection attempt {retry_count}/{max_retries} failed: {e}")
+            time.sleep(5)
+    
+    print("❌ Failed to connect Redis notification subscriber after all retries")
+
 def process_websocket_delivery():
     """Kafka consumer for real-time message delivery"""
     max_retries = 10
@@ -73,6 +111,10 @@ def process_websocket_delivery():
 delivery_thread = threading.Thread(target=process_websocket_delivery, daemon=True)
 delivery_thread.start()
 
+# Start Redis notification subscriber in background thread
+notification_thread = threading.Thread(target=process_redis_notifications, daemon=True)
+notification_thread.start()
+
 @app.route('/health')
 def health():
     return {'status': 'healthy'}
@@ -81,6 +123,18 @@ def health():
 def on_connect():
     print(f'Client connected: {request.sid}')
     emit('connected', {'status': 'connected'})
+
+@socketio.on('register_user')
+def on_register_user(data):
+    user_id = data['user_id']
+    user_sockets[user_id] = request.sid
+    print(f'User {user_id} registered for notifications with socket {request.sid}')
+    
+    if redis_client:
+        try:
+            redis_client.hset(f'user:{user_id}', 'socket_id', request.sid)
+        except:
+            pass
 
 @socketio.on('disconnect')
 def on_disconnect():
@@ -147,7 +201,7 @@ def on_send_message(data):
     
     print(f'📨 Received message from {user_id} for room {room_id}')
     
-    # Send to messaging service (which will queue in Kafka)
+    # Store message in database first
     try:
         response = requests.post(f'{MESSAGING_SERVICE_URL}/send_message', json={
             'room_id': room_id,
@@ -157,17 +211,24 @@ def on_send_message(data):
         })
         
         if response.status_code == 200:
-            # Acknowledge to sender that message is queued
-            emit('message_delivered', {
+            print(f'✅ Message stored in database')
+            
+            # Emit directly to room instead of using Kafka
+            socketio.emit('receive_message', {
+                'room_id': room_id,
+                'user_id': user_id,
+                'message': message,
                 'timestamp': timestamp,
-                'status': 'queued'
-            })
-            print(f'✅ Message queued successfully')
+                'delivery_status': 'delivered'
+            }, room=room_id)
+            
+            print(f'📤 Message delivered to room {room_id}')
+            
         else:
-            print(f'❌ Failed to queue message: {response.status_code}')
+            print(f'❌ Failed to store message: {response.status_code}')
             
     except Exception as e:
-        print(f'❌ Error sending to messaging service: {e}')
+        print(f'❌ Error sending message: {e}')
 
 @socketio.on('message_read')
 def on_message_read(data):

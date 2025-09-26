@@ -114,12 +114,11 @@
             border-radius: 50%; 
             min-width: 20px; 
             height: 20px; 
-            display: flex; 
+            display: flex;
             align-items: center; 
             justify-content: center; 
             font-size: 11px; 
             font-weight: 600;
-            display: none;
         }
         
         .chat-area { 
@@ -313,6 +312,38 @@
         .invite-status.accepted { background: #4caf50; color: white; }
         .invite-status.rejected { background: #f44336; color: white; }
         .invite-time { font-size: 11px; color: #8696a0; margin-top: 5px; }
+        
+        /* Notification Styles */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #2a3942;
+            border: 1px solid #00a884;
+            border-radius: 8px;
+            padding: 15px;
+            max-width: 300px;
+            z-index: 10000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        .notification.show {
+            transform: translateX(0);
+        }
+        .notification-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .notification-icon {
+            font-size: 20px;
+        }
+        .notification-message {
+            color: #e9edef;
+            font-size: 14px;
+            line-height: 1.4;
+        }
         
         /* Search Modal Styles */
         .search-modal { 
@@ -930,6 +961,11 @@
                     localStorage.setItem('authToken', authToken);
                     localStorage.setItem('userData', JSON.stringify(currentUserData));
                     
+                    // Request notification permission
+                    if (Notification.permission === 'default') {
+                        Notification.requestPermission();
+                    }
+                    
                     showMainApp();
                 } else {
                     showError(data.error || 'Login failed');
@@ -1063,6 +1099,11 @@
             socket.on('connect', () => {
                 console.log('✅ Connected to WebSocket');
                 updateStatus(true);
+                
+                // Register user for notifications
+                if (currentUser) {
+                    socket.emit('register_user', {user_id: currentUser});
+                }
             });
             
             socket.on('disconnect', () => {
@@ -1072,19 +1113,28 @@
             
             socket.on('receive_message', (data) => {
                 console.log('📨 Message received:', data);
-                if (data.room_id == currentRoom && data.user_id !== currentUser) {
-                    displayMessage(data.user_id, data.message, false, new Date(data.timestamp), data.delivery_status);
+                if (data.room_id == currentRoom) {
+                    // Show message for both sender and receiver in current room
+                    const isOwn = data.user_id === currentUser;
+                    displayMessage(data.user_id, data.message, isOwn, new Date(data.timestamp), data.delivery_status);
                     
-                    setTimeout(() => {
-                        socket.emit('message_read', {
-                            room_id: currentRoom,
-                            timestamp: data.timestamp,
-                            user_id: currentUser
-                        });
-                    }, 1000);
-                } else if (data.room_id != currentRoom) {
+                    // Only send read receipt if it's not our own message
+                    if (!isOwn) {
+                        setTimeout(() => {
+                            socket.emit('message_read', {
+                                room_id: currentRoom,
+                                timestamp: data.timestamp,
+                                user_id: currentUser
+                            });
+                        }, 1000);
+                    }
+                } else {
+                    // Message for different room - update unread count
                     loadUnreadCounts();
                 }
+                
+                // Update recent chats to show latest message
+                loadRecentChats();
             });
 
             socket.on('message_delivered', (data) => {
@@ -1107,6 +1157,92 @@
                     refreshTypingIndicator();
                 }
             });
+
+            socket.on('notification', (data) => {
+                console.log('🔔 Notification received:', data);
+                
+                if (data.type === 'invite_status_update') {
+                    updateInviteStatus(data.invite_id, data.status);
+                } else {
+                    showNotification(data);
+                }
+            });
+        }
+
+        function removeInviteFromUI(inviteId) {
+            // Find and remove the invite element from the UI
+            const inviteElements = document.querySelectorAll('.invite-item');
+            inviteElements.forEach(element => {
+                const acceptBtn = element.querySelector(`[onclick*="${inviteId}"]`);
+                if (acceptBtn) {
+                    element.style.transition = 'opacity 0.3s ease';
+                    element.style.opacity = '0';
+                    setTimeout(() => {
+                        element.remove();
+                        
+                        // Check if no invites left and show empty message
+                        const container = document.getElementById('receivedInvites');
+                        if (container && container.children.length === 0) {
+                            container.innerHTML = `<div style="padding: 20px; text-align: center; color: #8696a0;">No received invites</div>`;
+                        }
+                    }, 300);
+                }
+            });
+        }
+
+        function updateInviteStatus(inviteId, status) {
+            // Update invite status in the UI if invites tab is active
+            if (activeTab === 'invites') {
+                const inviteElements = document.querySelectorAll('.invite-item');
+                inviteElements.forEach(element => {
+                    const acceptBtn = element.querySelector(`[onclick*="${inviteId}"]`);
+                    if (acceptBtn) {
+                        const statusElement = element.querySelector('.invite-status');
+                        const actionsElement = element.querySelector('.invite-actions');
+                        
+                        if (statusElement) {
+                            statusElement.textContent = status;
+                            statusElement.className = `invite-status ${status}`;
+                        }
+                        
+                        if (actionsElement) {
+                            actionsElement.innerHTML = `<span class="invite-status ${status}">${status}</span>`;
+                        }
+                    }
+                });
+            }
+        }
+
+        function showNotification(data) {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.innerHTML = `
+                <div class="notification-content">
+                    <div class="notification-icon">${data.type === 'invite_response' ? '💬' : '👥'}</div>
+                    <div class="notification-message">${data.message}</div>
+                </div>
+            `;
+            
+            // Add to page
+            document.body.appendChild(notification);
+            
+            // Show notification
+            setTimeout(() => notification.classList.add('show'), 100);
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
+            
+            // Also show browser notification if permission granted
+            if (Notification.permission === 'granted') {
+                new Notification('Chat App', {
+                    body: data.message,
+                    icon: '/favicon.ico'
+                });
+            }
         }
 
         // Event listeners
@@ -1345,53 +1481,96 @@
             if (!currentUser || !authToken) return;
             
             try {
-                let response;
-                if (activeInviteTab === 'received') {
-                    // Load group invites for the user
-                    response = await fetch(`/api/user_invites/${currentUser}`, {
-                        headers: {'Authorization': `Bearer ${authToken}`}
-                    });
-                } else {
-                    // For sent invites, we'd need a different endpoint
-                    // For now, show empty
-                    const container = document.getElementById('sentInvites');
-                    container.innerHTML = `<div style="padding: 20px; text-align: center; color: #8696a0;">Sent invites not implemented yet</div>`;
-                    return;
-                }
-                
-                const invites = await response.json();
-
                 const containerId = activeInviteTab === 'received' ? 'receivedInvites' : 'sentInvites';
                 const container = document.getElementById(containerId);
-
-                if (!Array.isArray(invites) || invites.length === 0) {
-                    container.innerHTML = `<div style="padding: 20px; text-align: center; color: #8696a0;">No ${activeInviteTab} invites</div>`;
-                    return;
-                }
-
-                container.innerHTML = invites.map(invite => {
-                    const otherUser = invite.from_user_id;
-                    const timeAgo = formatTimestamp(new Date(invite.created_at));
+                
+                if (activeInviteTab === 'received') {
+                    // Load both chat and group invites
+                    const [chatResponse, groupResponse] = await Promise.all([
+                        fetch(`/api/invites?type=received`, {
+                            headers: {'Authorization': `Bearer ${authToken}`}
+                        }),
+                        fetch(`/api/user_invites/${currentUser}`, {
+                            headers: {'Authorization': `Bearer ${authToken}`}
+                        })
+                    ]);
                     
-                    return `
-                        <div class="invite-item">
-                            <div class="invite-header">
-                                ${createAvatar(otherUser, invite.inviter_avatar_color)}
-                                <div class="invite-info">
-                                    <div class="invite-from">${otherUser}</div>
-                                    <div class="invite-type">Group: ${invite.group_name}</div>
+                    const chatInvites = chatResponse.ok ? await chatResponse.json() : [];
+                    const groupInvites = groupResponse.ok ? await groupResponse.json() : [];
+                    
+                    const allInvites = [...(Array.isArray(chatInvites) ? chatInvites : []), ...(Array.isArray(groupInvites) ? groupInvites : [])];
+                    
+                    if (allInvites.length === 0) {
+                        container.innerHTML = `<div style="padding: 20px; text-align: center; color: #8696a0;">No received invites</div>`;
+                        return;
+                    }
+                    
+                    container.innerHTML = allInvites.map(invite => {
+                        const otherUser = invite.from_user_id || invite.other_user_id;
+                        const timeAgo = formatTimestamp(new Date(invite.created_at));
+                        const isGroupInvite = invite.group_name !== undefined;
+                        
+                        return `
+                            <div class="invite-item">
+                                <div class="invite-header">
+                                    ${createAvatar(otherUser, invite.inviter_avatar_color || invite.other_user_email)}
+                                    <div class="invite-info">
+                                        <div class="invite-from">${otherUser}</div>
+                                        <div class="invite-type">${isGroupInvite ? `Group: ${invite.group_name}` : 'Chat Invite'}</div>
+                                    </div>
+                                    <div class="invite-status pending">pending</div>
                                 </div>
-                                <div class="invite-status pending">pending</div>
+                                ${invite.message || invite.custom_message ? `<div class="invite-message">"${invite.message || invite.custom_message}"</div>` : ''}
+                                <div class="invite-time">${timeAgo}</div>
+                                <div class="invite-actions">
+                                    ${isGroupInvite ? 
+                                        `<button class="invite-btn accept" onclick="respondToGroupInvite(${invite.invite_id}, 'accept')">Accept</button>
+                                         <button class="invite-btn reject" onclick="respondToGroupInvite(${invite.invite_id}, 'decline')">Decline</button>` :
+                                        `<button class="invite-btn accept" onclick="respondToInvite(${invite.id}, 'accept')">Accept</button>
+                                         <button class="invite-btn reject" onclick="respondToInvite(${invite.id}, 'reject')">Decline</button>`
+                                    }
+                                </div>
                             </div>
-                            ${invite.message ? `<div class="invite-message">"${invite.message}"</div>` : ''}
-                            <div class="invite-time">${timeAgo}</div>
-                            <div class="invite-actions">
-                                <button class="invite-btn accept" onclick="respondToGroupInvite(${invite.invite_id}, 'accept')">Accept</button>
-                                <button class="invite-btn reject" onclick="respondToGroupInvite(${invite.invite_id}, 'decline')">Decline</button>
+                        `;
+                    }).join('');
+                } else {
+                    // Load sent invites from user service
+                    const response = await fetch(`/api/invites?type=sent`, {
+                        headers: {'Authorization': `Bearer ${authToken}`}
+                    });
+                    
+                    if (!response.ok) {
+                        container.innerHTML = `<div style="padding: 20px; text-align: center; color: #8696a0;">Failed to load sent invites</div>`;
+                        return;
+                    }
+                    
+                    const invites = await response.json();
+                    
+                    if (!Array.isArray(invites) || invites.length === 0) {
+                        container.innerHTML = `<div style="padding: 20px; text-align: center; color: #8696a0;">No sent invites</div>`;
+                        return;
+                    }
+                    
+                    container.innerHTML = invites.map(invite => {
+                        const otherUser = invite.other_user_id;
+                        const timeAgo = formatTimestamp(new Date(invite.created_at));
+                        
+                        return `
+                            <div class="invite-item">
+                                <div class="invite-header">
+                                    ${createAvatar(otherUser)}
+                                    <div class="invite-info">
+                                        <div class="invite-from">To: ${otherUser}</div>
+                                        <div class="invite-type">${invite.invite_type === 'group' ? `Group: ${invite.target_id}` : 'Chat Invite'}</div>
+                                    </div>
+                                    <div class="invite-status ${invite.status}">${invite.status}</div>
+                                </div>
+                                ${invite.message ? `<div class="invite-message">"${invite.message}"</div>` : ''}
+                                <div class="invite-time">${timeAgo}</div>
                             </div>
-                        </div>
-                    `;
-                }).join('');
+                        `;
+                    }).join('');
+                }
             } catch (error) {
                 console.error('Load invites failed:', error);
                 const containerId = activeInviteTab === 'received' ? 'receivedInvites' : 'sentInvites';
@@ -1426,7 +1605,9 @@
                     } else {
                         alert(`❌ ${result.message}`);
                     }
-                    loadInvites(); // Refresh invites
+                    
+                    // Remove the invite from UI immediately
+                    removeInviteFromUI(inviteId);
                 } else {
                     alert(result.error || `Failed to ${action} invite`);
                 }
@@ -1454,15 +1635,17 @@
                 
                 if (response.ok) {
                     if (action === 'accept') {
-                        alert('Invite accepted! You can now chat with this user.');
+                        alert('✅ Chat invite accepted! You can now chat with this user.');
                         // Refresh contacts if we're on that tab
                         if (activeTab === 'contacts') {
                             loadContacts();
                         }
                     } else {
-                        alert('Invite declined.');
+                        alert('❌ Chat invite declined.');
                     }
-                    loadInvites(); // Refresh invites
+                    
+                    // Remove the invite from UI immediately
+                    removeInviteFromUI(inviteId);
                 } else {
                     alert(result.error || `Failed to ${action} invite`);
                 }
@@ -2170,6 +2353,12 @@
             currentRoom = chatId; currentChatName = name; currentChatType = type;
             typingUsers.clear(); refreshTypingIndicator();
             
+            // Clear unread count for this room
+            if (unreadCounts[chatId]) {
+                unreadCounts[chatId] = 0;
+                updateUnreadBadges();
+            }
+            
             // Store group data for settings button
             if (type === 'group' && groupData) {
                 currentGroupId = groupData.id;
@@ -2237,7 +2426,7 @@
             }
             
             document.getElementById('messages').innerHTML = '';
-            await loadChatHistory(chatId);
+            await loadChatHistory(chatId, true);
             
             if (socket) {
                 socket.emit('join_room', {room_id: chatId, user_id: currentUser});
@@ -2245,7 +2434,7 @@
             document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
         }
 
-        async function loadChatHistory(roomId) {
+        async function loadChatHistory(roomId, clearFirst = true) {
             try {
                 const response = await fetch(`/api/messages/${roomId}`, {
                     headers: {'Authorization': `Bearer ${authToken}`}
@@ -2256,14 +2445,28 @@
                     return;
                 }
                 
+                // Only clear messages if explicitly requested (initial load)
+                if (clearFirst) {
+                    document.getElementById('messages').innerHTML = '';
+                }
+                
+                // Get existing message timestamps to avoid duplicates
+                const existingTimestamps = new Set();
+                document.querySelectorAll('.message[data-timestamp]').forEach(msg => {
+                    existingTimestamps.add(msg.getAttribute('data-timestamp'));
+                });
+                
                 data.forEach(msg => {
-                    displayMessage(
-                        msg.user_id, 
-                        msg.message, 
-                        msg.user_id === currentUser, 
-                        new Date(msg.timestamp), 
-                        msg.delivery_status || 'delivered'
-                    );
+                    // Only add message if it doesn't already exist
+                    if (!existingTimestamps.has(msg.timestamp.toString())) {
+                        displayMessage(
+                            msg.user_id, 
+                            msg.message, 
+                            msg.user_id === currentUser, 
+                            new Date(msg.timestamp), 
+                            msg.delivery_status || 'delivered'
+                        );
+                    }
                 });
                 
                 setTimeout(scrollMessagesToBottom, 100);
@@ -2292,31 +2495,7 @@
             
             const timestamp = Date.now();
             
-            displayMessage(currentUser, message, true, new Date(timestamp), 'sent');
-            
-            try {
-                const response = await fetch('/api/messages', {
-                    method: 'POST', 
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${authToken}`
-                    },
-                    body: JSON.stringify({
-                        room_id: currentRoom, 
-                        user_id: currentUser, 
-                        message: message, 
-                        timestamp: timestamp, 
-                        delivery_status: 'sent'
-                    })
-                });
-                
-                if (response.ok) {
-                    console.log('💾 Message stored in database');
-                }
-            } catch (error) { 
-                console.error('Failed to store message:', error); 
-            }
-            
+            // Only send via WebSocket - remove duplicate API call
             if (socket) {
                 socket.emit('send_message', {
                     room_id: currentRoom, 
@@ -2331,6 +2510,13 @@
 
         function displayMessage(sender, message, isOwn, timestamp = new Date(), deliveryStatus = 'sent') {
             const messagesContainer = document.getElementById('messages');
+            
+            // Check if message already exists
+            const existingMessage = messagesContainer.querySelector(`[data-timestamp="${timestamp.getTime()}"]`);
+            if (existingMessage) {
+                return; // Don't add duplicate
+            }
+            
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isOwn ? 'own' : ''}`;
             messageDiv.setAttribute('data-timestamp', timestamp.getTime());
@@ -2420,12 +2606,16 @@
             });
         }, 60000);
 
-        // Load unread counts periodically
+        // Load unread counts and refresh current chat periodically
         setInterval(() => {
             if (currentUser && authToken) {
                 loadUnreadCounts();
+                // Auto-refresh current chat without clearing existing messages
+                if (currentRoom) {
+                    loadChatHistory(currentRoom, false);
+                }
             }
-        }, 10000);
+        }, 5000);
     </script>
 </body>
 </html>

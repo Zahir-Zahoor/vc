@@ -111,12 +111,17 @@ def invite_user():
         
         # Notify via Redis if user is online
         if redis_client:
-            redis_client.publish(f"user_notifications:{to_user_id}", json.dumps({
+            notification_msg = f"{from_user_id} sent you a chat invite"
+            if message:
+                notification_msg += f": {message}"
+            notification_data = {
                 'type': 'chat_invite',
                 'from_user_id': from_user_id,
                 'invite_id': invite_id,
-                'message': message
-            }))
+                'message': notification_msg
+            }
+            redis_client.publish(f"user_notifications:{to_user_id}", json.dumps(notification_data))
+            print(f"📢 Sent notification to {to_user_id}: {notification_msg}")
         
         return jsonify({
             'status': 'success',
@@ -153,8 +158,8 @@ def accept_invite():
         
         from_user_id, to_user_id, invite_type, target_id = invite
         
-        # Update invite status
-        cur.execute("UPDATE invites SET status = %s WHERE id = %s", (action + 'ed', invite_id))
+        # Delete invite permanently instead of updating status
+        cur.execute("DELETE FROM invites WHERE id = %s", (invite_id,))
         
         result = {'status': 'success', 'action': action}
         
@@ -180,6 +185,28 @@ def accept_invite():
                 result['group_id'] = target_id
         
         conn.commit()
+        
+        # Send notification to inviter
+        if redis_client:
+            notification_msg = f"{to_user_id} {action}ed your {invite_type} invite"
+            notification_data = {
+                'type': 'invite_response',
+                'from_user_id': to_user_id,
+                'action': action,
+                'invite_type': invite_type,
+                'message': notification_msg
+            }
+            redis_client.publish(f"user_notifications:{from_user_id}", json.dumps(notification_data))
+            print(f"📢 Sent response notification to {from_user_id}: {notification_msg}")
+            
+            # Send invite status update
+            redis_client.publish(f"user_notifications:{from_user_id}", json.dumps({
+                'type': 'invite_status_update',
+                'invite_id': invite_id,
+                'status': action + 'ed',
+                'invite_type': invite_type
+            }))
+        
         cur.close()
         conn.close()
         
@@ -257,7 +284,7 @@ def get_invites():
                 SELECT i.id, i.from_user_id, u.email, i.invite_type, i.target_id, i.status, i.message, i.created_at
                 FROM invites i
                 JOIN users u ON i.from_user_id = u.user_id
-                WHERE i.to_user_id = %s
+                WHERE i.to_user_id = %s AND i.status = 'pending'
                 ORDER BY i.created_at DESC
             """, (user_id,))
         else:
