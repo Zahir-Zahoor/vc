@@ -1691,9 +1691,9 @@
                 });
                 const data = await response.json();
                 if (!data.error) {
-                    // Don't overwrite unread count for currently active room and previous room if page is visible
+                    // Update all unread counts but preserve zero counts for recently active rooms
+                    unreadCounts = data;
                     if (!document.hidden) {
-                        unreadCounts = data;
                         if (currentRoom) {
                             unreadCounts[currentRoom] = 0;
                             unreadCounts[String(currentRoom)] = 0;
@@ -1702,8 +1702,6 @@
                             unreadCounts[previousRoom] = 0;
                             unreadCounts[String(previousRoom)] = 0;
                         }
-                    } else {
-                        unreadCounts = data;
                     }
                     updateUnreadBadges();
                 }
@@ -2391,6 +2389,11 @@
             if (!chatId) { showWelcome(); return; }
             previousRoom = currentRoom;
             currentRoom = chatId; currentChatName = name; currentChatType = type;
+            
+            // Clear previous room tracking after 5 seconds
+            setTimeout(() => {
+                previousRoom = null;
+            }, 5000);
             typingUsers.clear(); refreshTypingIndicator();
             
             // Clear unread count for this room
