@@ -477,10 +477,10 @@
         }
         .message.own .message-sender { display: none; }
         
-        .status-icon { font-size: 12px; }
-        .status-icon.sent::after { content: '✓'; color: rgba(255, 255, 255, 0.6); }
-        .status-icon.delivered::after { content: '✓✓'; color: rgba(255, 255, 255, 0.6); }
-        .status-icon.read::after { content: '✓✓'; color: #e95420; }
+        .status-icon { font-size: 14px; font-weight: bold; }
+        .status-icon.sent::after { content: '✓'; color: rgba(255, 255, 255, 0.8); }
+        .status-icon.delivered::after { content: '✓✓'; color: #474343; }
+        .status-icon.read::after { content: '✓✓'; color: #03bb62; text-shadow: 0 0 6px rgba(0, 230, 118, 0.9); }
         
         .typing-dots { display: flex; gap: 3px; }
         .typing-dot { 
@@ -682,7 +682,7 @@
         .search-modal { 
             position: fixed; 
             top: 0; left: 0; right: 0; bottom: 0; 
-            background: rgba(44, 0, 30, 0.8); 
+            background: rgba(27, 0, 19, 0.8); 
             backdrop-filter: blur(10px);
             display: flex; 
             align-items: center; 
@@ -692,7 +692,7 @@
         .search-modal-content { 
             background: rgba(119, 41, 83, 0.95); 
             backdrop-filter: blur(15px);
-            border: 1px solid rgba(233, 84, 32, 0.3);
+            border: 1px solid rgba(20, 20, 20, 0.3);
             padding: 30px; 
             border-radius: 8px; 
             width: 500px; 
