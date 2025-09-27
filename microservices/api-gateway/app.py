@@ -245,7 +245,14 @@ def send_message():
 @app.route('/api/messages/<room_id>')
 def get_messages(room_id):
     try:
-        response = requests.get(f'{MESSAGING_SERVICE_URL}/get_messages/{room_id}')
+        token = request.headers.get('Authorization')
+        user_id, email = get_user_from_token(token)
+        
+        params = {}
+        if user_id:
+            params['user_id'] = user_id
+            
+        response = requests.get(f'{MESSAGING_SERVICE_URL}/get_messages/{room_id}', params=params)
         return jsonify(response.json())
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -363,6 +370,49 @@ def accept_group_invite():
 def decline_group_invite():
     try:
         response = requests.post(f'{GROUP_SERVICE_URL}/decline_invite', json=request.json)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/delete_chat_history', methods=['POST'])
+def delete_chat_history():
+    try:
+        token = request.headers.get('Authorization')
+        user_id, email = get_user_from_token(token)
+        if not user_id:
+            return jsonify({'error': 'Unauthorized'}), 401
+            
+        data = request.json
+        data['user_id'] = user_id
+        response = requests.post(f'{MESSAGING_SERVICE_URL}/delete_chat_history', json=data)
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/export_chat/<room_id>')
+def export_chat(room_id):
+    try:
+        token = request.headers.get('Authorization')
+        user_id, email = get_user_from_token(token)
+        if not user_id:
+            return jsonify({'error': 'Unauthorized'}), 401
+            
+        response = requests.get(f'{MESSAGING_SERVICE_URL}/export_chat/{room_id}')
+        return jsonify(response.json()), response.status_code
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/leave_group', methods=['POST'])
+def leave_group():
+    try:
+        token = request.headers.get('Authorization')
+        user_id, email = get_user_from_token(token)
+        if not user_id:
+            return jsonify({'error': 'Unauthorized'}), 401
+            
+        data = request.json
+        data['user_id'] = user_id
+        response = requests.post(f'{GROUP_SERVICE_URL}/leave_group', json=data)
         return jsonify(response.json()), response.status_code
     except Exception as e:
         return jsonify({'error': str(e)}), 500

@@ -244,6 +244,9 @@
             border-color: rgba(233, 84, 32, 0.4);
             transform: translateX(4px);
         }
+        .chat-item:hover .chat-dropdown-arrow {
+            opacity: 1;
+        }
         .chat-item.active { 
             background: rgba(233, 84, 32, 0.8);
             border-color: #e95420;
@@ -290,7 +293,7 @@
         .unread-badge { 
             position: absolute; 
             top: 8px; 
-            right: 8px; 
+            right: 35px; 
             background: #e95420; 
             color: white; 
             border-radius: 50%; 
@@ -303,6 +306,137 @@
             font-weight: 600;
             font-family: 'Ubuntu', sans-serif;
             box-shadow: 0 2px 8px rgba(233, 84, 32, 0.4);
+        }
+        
+        /* Chat Dropdown Styles */
+        .chat-dropdown-arrow {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.8;
+            transition: opacity 0.2s;
+            cursor: pointer;
+            color: #ffffff;
+            font-size: 16px;
+            z-index: 10;
+            background: rgba(233, 84, 32, 0.3);
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .chat-dropdown-arrow:hover {
+            color: #ffffff;
+        }
+        .chat-dropdown {
+            position: absolute;
+            right: 8px;
+            top: 100%;
+            background: rgba(44, 0, 30, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(233, 84, 32, 0.3);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            min-width: 160px;
+            display: none;
+        }
+        .chat-dropdown.show {
+            display: block;
+        }
+        .chat-dropdown-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            color: #ffffff;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+        .chat-dropdown-item:hover {
+            background: rgba(233, 84, 32, 0.2);
+        }
+        .chat-dropdown-item:first-child {
+            border-radius: 8px 8px 0 0;
+        }
+        .chat-dropdown-item:last-child {
+            border-radius: 0 0 8px 8px;
+        }
+        .chat-dropdown-item.danger {
+            color: #ff6b6b;
+        }
+        .chat-dropdown-item.danger:hover {
+            background: rgba(255, 107, 107, 0.2);
+        }
+        
+        /* Confirmation Modal */
+        .confirmation-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .confirmation-modal.show {
+            display: flex;
+        }
+        .confirmation-content {
+            background: rgba(44, 0, 30, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(233, 84, 32, 0.3);
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 400px;
+            width: 90%;
+            color: #ffffff;
+        }
+        .confirmation-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #e95420;
+        }
+        .confirmation-message {
+            margin-bottom: 20px;
+            line-height: 1.5;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        .confirmation-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        .confirmation-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .confirmation-btn.cancel {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+        .confirmation-btn.cancel:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .confirmation-btn.confirm {
+            background: #e95420;
+            color: #ffffff;
+        }
+        .confirmation-btn.confirm:hover {
+            background: #d44414;
         }
         
         .chat-area { 
@@ -2697,13 +2831,17 @@
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
                     chatItem.setAttribute('data-room-id', chat.room_id);
+                    chatItem.setAttribute('data-chat-type', chat.chat_type || 'direct');
+                    chatItem.setAttribute('data-other-user', chat.other_user);
                     
                     // Handle different chat types
-                    if (chat.chat_type === 'group') {
-                        chatItem.onclick = () => startChatRoom(chat.room_id, 'group', chat.other_user);
-                    } else {
-                        chatItem.onclick = () => beginDirectMessage(chat.other_user);
-                    }
+                    const chatClickHandler = () => {
+                        if (chat.chat_type === 'group') {
+                            startChatRoom(chat.room_id, 'group', chat.other_user);
+                        } else {
+                            beginDirectMessage(chat.other_user);
+                        }
+                    };
                     
                     const avatar = chat.chat_type === 'group' 
                         ? `<div class="user-avatar" style="background: ${chat.avatar_color || '#00a884'};">#</div>`
@@ -2717,7 +2855,33 @@
                         </div>
                         <div class="chat-time">${formatTime(chat.last_message_time)}</div>
                         <div class="unread-badge">0</div>
+                        <div class="chat-dropdown-arrow" onclick="event.stopPropagation(); toggleChatDropdown(this)">▾</div>
+                        <div class="chat-dropdown">
+                            <div class="chat-dropdown-item" onclick="event.stopPropagation(); deleteChatHistory('${chat.room_id}', '${chat.other_user}')">
+                                🗑 Delete Chat
+                            </div>
+                            <div class="chat-dropdown-item" onclick="event.stopPropagation(); exportChat('${chat.room_id}', '${chat.other_user}')">
+                                📤 Export Chat
+                            </div>
+                            ${chat.chat_type === 'group' ? `
+                                <div class="chat-dropdown-item danger" onclick="event.stopPropagation(); leaveGroup('${chat.room_id}', '${chat.other_user}')">
+                                    🚪 Leave Group
+                                </div>
+                            ` : ''}
+                        </div>
                     `;
+                    
+                    // Add click handler to the main chat area (excluding dropdown)
+                    const chatInfo = chatItem.querySelector('.chat-info');
+                    const avatarElement = chatItem.querySelector('.user-avatar');
+                    const chatTime = chatItem.querySelector('.chat-time');
+                    
+                    [chatInfo, avatarElement, chatTime].forEach(element => {
+                        if (element) {
+                            element.addEventListener('click', chatClickHandler);
+                        }
+                    });
+                    
                     chatsList.appendChild(chatItem);
                 });
                 updateUnreadBadges();
@@ -3077,6 +3241,173 @@
                 }
             }
         }, 5000);
+
+        // Chat dropdown functionality
+        function toggleChatDropdown(arrow) {
+            const dropdown = arrow.nextElementSibling;
+            const isVisible = dropdown.classList.contains('show');
+            
+            // Close all other dropdowns
+            document.querySelectorAll('.chat-dropdown.show').forEach(d => d.classList.remove('show'));
+            
+            if (!isVisible) {
+                dropdown.classList.add('show');
+            }
+        }
+
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.chat-dropdown') && !e.target.closest('.chat-dropdown-arrow')) {
+                document.querySelectorAll('.chat-dropdown.show').forEach(d => d.classList.remove('show'));
+            }
+        });
+
+        async function deleteChatHistory(roomId, chatName) {
+            showConfirmation(
+                'Delete Chat History',
+                `Are you sure you want to delete your chat history with "${chatName}"? This will only remove it from your device and cannot be undone.`,
+                async () => {
+                    try {
+                        const response = await fetch('/api/delete_chat_history', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: JSON.stringify({ room_id: roomId })
+                        });
+                        
+                        if (response.ok) {
+                            // Remove from UI immediately
+                            const chatItem = document.querySelector(`[data-room-id="${roomId}"]`);
+                            if (chatItem) {
+                                chatItem.remove();
+                            }
+                            
+                            // If this was the current chat, clear it
+                            if (currentRoom === roomId) {
+                                document.getElementById('messages').innerHTML = '';
+                                document.getElementById('chatStatus').textContent = 'Select a chat to start messaging';
+                                currentRoom = null;
+                            }
+                        } else {
+                            alert('Failed to delete chat history');
+                        }
+                    } catch (error) {
+                        console.error('Delete chat failed:', error);
+                        alert('Failed to delete chat history');
+                    }
+                }
+            );
+        }
+
+        async function exportChat(roomId, chatName) {
+            try {
+                const response = await fetch(`/api/export_chat/${roomId}`, {
+                    headers: {'Authorization': `Bearer ${authToken}`}
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const chatContent = data.messages.map(msg => 
+                        `[${new Date(msg.timestamp).toLocaleString()}] ${msg.sender}: ${msg.content}`
+                    ).join('\n');
+                    
+                    const blob = new Blob([chatContent], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `chat_${chatName}_${new Date().toISOString().split('T')[0]}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } else {
+                    alert('Failed to export chat');
+                }
+            } catch (error) {
+                console.error('Export chat failed:', error);
+                alert('Failed to export chat');
+            }
+        }
+
+        async function leaveGroup(roomId, groupName) {
+            showConfirmation(
+                'Leave Group',
+                `Are you sure you want to leave the group "${groupName}"? You will no longer receive messages from this group.`,
+                async () => {
+                    try {
+                        const response = await fetch('/api/leave_group', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${authToken}`
+                            },
+                            body: JSON.stringify({ group_id: roomId })
+                        });
+                        
+                        if (response.ok) {
+                            // Remove from UI
+                            const chatItem = document.querySelector(`[data-room-id="${roomId}"]`);
+                            if (chatItem) {
+                                chatItem.remove();
+                            }
+                            
+                            // If this was the current chat, clear it
+                            if (currentRoom === roomId) {
+                                document.getElementById('messages').innerHTML = '';
+                                document.getElementById('chatStatus').textContent = 'Select a chat to start messaging';
+                                currentRoom = null;
+                            }
+                            
+                            // Refresh recent chats and groups
+                            loadRecentChats();
+                            loadMyGroups();
+                        } else {
+                            alert('Failed to leave group');
+                        }
+                    } catch (error) {
+                        console.error('Leave group failed:', error);
+                        alert('Failed to leave group');
+                    }
+                }
+            );
+        }
+
+        function showConfirmation(title, message, onConfirm) {
+            const modal = document.getElementById('confirmationModal');
+            if (!modal) {
+                // Create modal if it doesn't exist
+                const modalHtml = `
+                    <div id="confirmationModal" class="confirmation-modal">
+                        <div class="confirmation-content">
+                            <div class="confirmation-title" id="confirmationTitle"></div>
+                            <div class="confirmation-message" id="confirmationMessage"></div>
+                            <div class="confirmation-buttons">
+                                <button class="confirmation-btn cancel" onclick="hideConfirmation()">Cancel</button>
+                                <button class="confirmation-btn confirm" id="confirmationConfirm">Confirm</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+            }
+            
+            document.getElementById('confirmationTitle').textContent = title;
+            document.getElementById('confirmationMessage').textContent = message;
+            document.getElementById('confirmationConfirm').onclick = () => {
+                hideConfirmation();
+                onConfirm();
+            };
+            document.getElementById('confirmationModal').classList.add('show');
+        }
+
+        function hideConfirmation() {
+            const modal = document.getElementById('confirmationModal');
+            if (modal) {
+                modal.classList.remove('show');
+            }
+        }
     </script>
 </body>
 </html>

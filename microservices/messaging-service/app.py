@@ -150,7 +150,7 @@ def get_recent_chats(user_id):
         conn = get_db_connection()
         cur = conn.cursor()
         
-        # Get recent conversations (both DM and group chats)
+        # Get all recent conversations
         cur.execute("""
             SELECT DISTINCT room_id, MAX(timestamp) as last_time
             FROM messages 
@@ -161,8 +161,33 @@ def get_recent_chats(user_id):
             ORDER BY last_time DESC
         """, (user_id,))
         
-        rows = cur.fetchall()
-        print(f"Found {len(rows)} rooms: {rows}")
+        all_rooms = cur.fetchall()
+        
+        # Filter out completely deleted chats (no new messages after deletion)
+        filtered_rooms = []
+        for room_id, last_time in all_rooms:
+            cur.execute("SELECT EXTRACT(EPOCH FROM deleted_at) FROM deleted_chats WHERE user_id = %s AND room_id = %s", (user_id, room_id))
+            deleted_result = cur.fetchone()
+            
+            if deleted_result:
+                # Check if there are ANY messages after deletion timestamp
+                # Convert deletion timestamp from seconds to milliseconds for comparison
+                deleted_timestamp_ms = int(deleted_result[0] * 1000)
+                cur.execute("""
+                    SELECT COUNT(*) FROM messages 
+                    WHERE room_id = %s AND timestamp > %s
+                """, (room_id, deleted_timestamp_ms))
+                new_messages_count = cur.fetchone()[0]
+                
+                # Only show if there are new messages after deletion
+                if new_messages_count > 0:
+                    filtered_rooms.append((room_id, last_time))
+            else:
+                # Not deleted, show normally
+                filtered_rooms.append((room_id, last_time))
+        
+        rows = filtered_rooms
+        print(f"Found {len(rows)} rooms after filtering: {rows}")
         
         chats = []
         for row in rows:
@@ -368,13 +393,34 @@ def update_message_status():
 @app.route('/get_messages/<room_id>')
 def get_messages(room_id):
     try:
+        user_id = request.args.get('user_id')
         conn = get_db_connection()
         cur = conn.cursor()
         
-        cur.execute(
-            "SELECT user_id, message, timestamp, delivery_status FROM messages WHERE room_id = %s ORDER BY timestamp ASC",
-            (room_id,)
-        )
+        # Check if user has deleted this chat
+        if user_id:
+            cur.execute(
+                "SELECT EXTRACT(EPOCH FROM deleted_at) FROM deleted_chats WHERE user_id = %s AND room_id = %s",
+                (user_id, room_id)
+            )
+            deleted_result = cur.fetchone()
+            deleted_timestamp = deleted_result[0] if deleted_result else None
+        else:
+            deleted_timestamp = None
+        
+        # Get messages, filtering by deletion timestamp if applicable
+        if deleted_timestamp:
+            # Convert deletion timestamp from seconds to milliseconds for comparison
+            deleted_timestamp_ms = int(deleted_timestamp * 1000)
+            cur.execute(
+                "SELECT user_id, message, timestamp, delivery_status FROM messages WHERE room_id = %s AND timestamp > %s ORDER BY timestamp ASC",
+                (room_id, deleted_timestamp_ms)
+            )
+        else:
+            cur.execute(
+                "SELECT user_id, message, timestamp, delivery_status FROM messages WHERE room_id = %s ORDER BY timestamp ASC",
+                (room_id,)
+            )
         
         messages = []
         for row in cur.fetchall():
@@ -392,6 +438,72 @@ def get_messages(room_id):
     except Exception as e:
         print(f"Error in get_messages: {e}")
         print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/delete_chat_history', methods=['POST'])
+def delete_chat_history():
+    try:
+        data = request.json
+        room_id = data.get('room_id')
+        user_id = data.get('user_id')
+        
+        if not room_id or not user_id:
+            return jsonify({'error': 'Missing room_id or user_id'}), 400
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Create deleted_chats table if it doesn't exist
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS deleted_chats (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR(255) NOT NULL,
+                room_id VARCHAR(255) NOT NULL,
+                deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, room_id)
+            )
+        """)
+        
+        # Mark this chat as deleted for this user
+        cur.execute(
+            "INSERT INTO deleted_chats (user_id, room_id) VALUES (%s, %s) ON CONFLICT (user_id, room_id) DO UPDATE SET deleted_at = CURRENT_TIMESTAMP",
+            (user_id, room_id)
+        )
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"Error in delete_chat_history: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/export_chat/<room_id>')
+def export_chat(room_id):
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            "SELECT user_id, message, timestamp FROM messages WHERE room_id = %s ORDER BY timestamp ASC",
+            (room_id,)
+        )
+        
+        messages = []
+        for row in cur.fetchall():
+            messages.append({
+                'sender': row[0],
+                'content': row[1],
+                'timestamp': row[2].isoformat() if row[2] else None
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({'messages': messages})
+    except Exception as e:
+        print(f"Error in export_chat: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

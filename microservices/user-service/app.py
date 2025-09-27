@@ -23,6 +23,33 @@ def get_db_connection():
 def health():
     return jsonify({'status': 'healthy'})
 
+@app.route('/update_status', methods=['POST'])
+def update_user_status():
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        status = data.get('status')
+        
+        if not user_id or not status:
+            return jsonify({'error': 'Missing user_id or status'}), 400
+            
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute(
+            "UPDATE users SET status = %s, last_seen = CURRENT_TIMESTAMP WHERE user_id = %s",
+            (status, user_id)
+        )
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'status': status})
+    except Exception as e:
+        print(f"Error updating user status: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/user_status/<user_id>')
 def get_user_status(user_id):
     try:

@@ -724,5 +724,73 @@ def decline_invite():
         cur.close()
         conn.close()
 
+@app.route('/leave_group', methods=['POST'])
+def leave_group():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        data = request.json
+        group_id = data.get('group_id')
+        user_id = data.get('user_id')
+        
+        if not group_id or not user_id:
+            return jsonify({'error': 'Missing group_id or user_id'}), 400
+        
+        # Check if user is in the group
+        cur.execute("SELECT role FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
+        member = cur.fetchone()
+        
+        if not member:
+            return jsonify({'error': 'User is not a member of this group'}), 404
+        
+        # Get group name for notification
+        cur.execute("SELECT name FROM groups WHERE id = %s", (group_id,))
+        group_result = cur.fetchone()
+        group_name = group_result[0] if group_result else 'Unknown Group'
+        
+        # Remove user from group
+        cur.execute("DELETE FROM group_members WHERE group_id = %s AND user_id = %s", (group_id, user_id))
+        
+        # If this was the last member or the owner left, delete the group
+        cur.execute("SELECT COUNT(*) FROM group_members WHERE group_id = %s", (group_id,))
+        remaining_members = cur.fetchone()[0]
+        
+        if remaining_members == 0 or member[0] == 'owner':
+            cur.execute("DELETE FROM groups WHERE id = %s", (group_id,))
+            cur.execute("DELETE FROM group_members WHERE group_id = %s", (group_id,))
+        
+        conn.commit()
+        
+        # Send notification to remaining group members
+        try:
+            import redis
+            import json
+            redis_client = redis.Redis(host='redis', port=6379, decode_responses=True)
+            
+            # Get remaining members
+            cur.execute("SELECT user_id FROM group_members WHERE group_id = %s", (group_id,))
+            remaining_member_ids = [row[0] for row in cur.fetchall()]
+            
+            for member_id in remaining_member_ids:
+                notification_msg = f"{user_id} left the group {group_name}"
+                redis_client.publish(f"user_notifications:{member_id}", json.dumps({
+                    'type': 'group_member_left',
+                    'user_id': user_id,
+                    'group_id': group_id,
+                    'group_name': group_name,
+                    'message': notification_msg
+                }))
+        except Exception as e:
+            print(f"Failed to send notification: {e}")
+        
+        return jsonify({'message': f'Left group {group_name}'})
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
