@@ -80,16 +80,12 @@ def process_kafka_messages():
                     message_id = cur.fetchone()[0]
                     
                     # Add unread entries for recipients
-                    if str(room_id).startswith('direct_'):
+                    if str(room_id).startswith('dm_'):
                         # Direct message - extract other user
-                        users_part = str(room_id)[7:]
-                        other_user = None
-                        if users_part.startswith(user_id + '_'):
-                            other_user = users_part[len(user_id) + 1:]
-                        elif users_part.endswith('_' + user_id):
-                            other_user = users_part[:-len(user_id) - 1]
-                        
-                        if other_user:
+                        users_part = str(room_id)[3:]  # Remove 'dm_' prefix
+                        users = users_part.split('_')
+                        if len(users) >= 2:
+                            other_user = users[1] if users[0] == user_id else users[0]
                             cur.execute(
                                 "INSERT INTO unread_messages (user_id, room_id, message_id) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
                                 (other_user, room_id, message_id)
@@ -158,10 +154,12 @@ def get_recent_chats(user_id):
         cur.execute("""
             SELECT DISTINCT room_id, MAX(timestamp) as last_time
             FROM messages 
-            WHERE room_id LIKE %s OR room_id LIKE %s OR user_id = %s
+            WHERE room_id IN (
+                SELECT DISTINCT room_id FROM messages WHERE user_id = %s
+            )
             GROUP BY room_id
             ORDER BY last_time DESC
-        """, (f'dm_{user_id}_%', f'dm_%_{user_id}', user_id))
+        """, (user_id,))
         
         rows = cur.fetchall()
         print(f"Found {len(rows)} rooms: {rows}")
@@ -176,11 +174,17 @@ def get_recent_chats(user_id):
                 # Direct message format: dm_user1_user2
                 users_part = room_id[3:]  # Remove 'dm_' prefix
                 users = users_part.split('_')
-                other_user = users[1] if users[0] == user_id else users[0]
-                chat_type = 'direct'
+                if len(users) >= 2:
+                    other_user = users[1] if users[0] == user_id else users[0]
+                    chat_type = 'direct'
+                else:
+                    print(f"Invalid DM room format: {room_id}")
+                    continue
             else:
-                # Group chat (numeric room_id)
-                other_user = f"Group {room_id}"
+                # Group chat (numeric room_id) - get actual group name
+                cur.execute("SELECT name FROM groups WHERE id = %s", (room_id,))
+                group_result = cur.fetchone()
+                other_user = group_result[0] if group_result else f"Group {room_id}"
                 chat_type = 'group'
             
             print(f"Other user/Group: {other_user}")

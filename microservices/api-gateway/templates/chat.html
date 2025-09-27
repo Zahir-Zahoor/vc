@@ -881,6 +881,7 @@
         let currentUserData = null;
         let authToken = null;
         let currentRoom = null;
+        let previousRoom = null;
         let currentChatName = null;
         let currentChatType = null;
         let activeTab = 'groups';
@@ -1135,6 +1136,21 @@
                 
                 // Update recent chats to show latest message
                 loadRecentChats();
+                
+                // Clear unread count for current room after loading (only if page is visible)
+                if (data.room_id == currentRoom && !document.hidden) {
+                    setTimeout(() => {
+                        if (unreadCounts[currentRoom]) {
+                            unreadCounts[currentRoom] = 0;
+                            updateUnreadBadges();
+                        }
+                        const stringCurrentRoom = String(currentRoom);
+                        if (unreadCounts[stringCurrentRoom]) {
+                            unreadCounts[stringCurrentRoom] = 0;
+                            updateUnreadBadges();
+                        }
+                    }, 100);
+                }
             });
 
             socket.on('message_delivered', (data) => {
@@ -1675,7 +1691,20 @@
                 });
                 const data = await response.json();
                 if (!data.error) {
-                    unreadCounts = data;
+                    // Don't overwrite unread count for currently active room and previous room if page is visible
+                    if (!document.hidden) {
+                        unreadCounts = data;
+                        if (currentRoom) {
+                            unreadCounts[currentRoom] = 0;
+                            unreadCounts[String(currentRoom)] = 0;
+                        }
+                        if (previousRoom) {
+                            unreadCounts[previousRoom] = 0;
+                            unreadCounts[String(previousRoom)] = 0;
+                        }
+                    } else {
+                        unreadCounts = data;
+                    }
                     updateUnreadBadges();
                 }
             } catch (error) {
@@ -1781,7 +1810,6 @@
                         <div class="chat-info">
                             <div class="chat-name">${group.name}</div>
                         </div>
-                        <div class="unread-badge">0</div>
                     `;
                     groupsList.appendChild(chatItem);
                 });
@@ -2277,9 +2305,20 @@
                     const chatItem = document.createElement('div');
                     chatItem.className = 'chat-item';
                     chatItem.setAttribute('data-room-id', chat.room_id);
-                    chatItem.onclick = () => beginDirectMessage(chat.other_user);
+                    
+                    // Handle different chat types
+                    if (chat.chat_type === 'group') {
+                        chatItem.onclick = () => startChatRoom(chat.room_id, 'group', chat.other_user);
+                    } else {
+                        chatItem.onclick = () => beginDirectMessage(chat.other_user);
+                    }
+                    
+                    const avatar = chat.chat_type === 'group' 
+                        ? `<div class="user-avatar" style="background: ${chat.avatar_color || '#00a884'};">#</div>`
+                        : createAvatar(chat.other_user);
+                    
                     chatItem.innerHTML = `
-                        ${createAvatar(chat.other_user)}
+                        ${avatar}
                         <div class="chat-info">
                             <div class="chat-name">${chat.other_user}</div>
                             <div class="chat-preview">${chat.last_message || 'No messages yet'}</div>
@@ -2350,12 +2389,19 @@
 
         async function startChatRoom(chatId, type, name, groupData = null) {
             if (!chatId) { showWelcome(); return; }
+            previousRoom = currentRoom;
             currentRoom = chatId; currentChatName = name; currentChatType = type;
             typingUsers.clear(); refreshTypingIndicator();
             
             // Clear unread count for this room
             if (unreadCounts[chatId]) {
                 unreadCounts[chatId] = 0;
+                updateUnreadBadges();
+            }
+            // Also clear for string version of room ID (in case of type mismatch)
+            const stringChatId = String(chatId);
+            if (unreadCounts[stringChatId]) {
+                unreadCounts[stringChatId] = 0;
                 updateUnreadBadges();
             }
             
@@ -2605,6 +2651,24 @@
                 }
             });
         }, 60000);
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && currentRoom) {
+                // Clear unread count when user returns to active chat
+                setTimeout(() => {
+                    if (unreadCounts[currentRoom]) {
+                        unreadCounts[currentRoom] = 0;
+                        updateUnreadBadges();
+                    }
+                    const stringCurrentRoom = String(currentRoom);
+                    if (unreadCounts[stringCurrentRoom]) {
+                        unreadCounts[stringCurrentRoom] = 0;
+                        updateUnreadBadges();
+                    }
+                }, 100);
+            }
+        });
 
         // Load unread counts and refresh current chat periodically
         setInterval(() => {
