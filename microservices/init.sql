@@ -106,6 +106,15 @@ CREATE TABLE IF NOT EXISTS unread_messages (
     UNIQUE(user_id, room_id, message_id)
 );
 
+-- Deleted chats table for tracking when users delete chat history
+CREATE TABLE IF NOT EXISTS deleted_chats (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    room_id VARCHAR(255) NOT NULL,
+    deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, room_id)
+);
+
 -- Performance indexes
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
@@ -122,6 +131,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON group_members(group_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON group_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_unread_messages_user_room ON unread_messages(user_id, room_id);
+CREATE INDEX IF NOT EXISTS idx_deleted_chats_user_room ON deleted_chats(user_id, room_id);
 
 -- Insert sample data for testing
 -- Note: Passwords are hashed with bcrypt for 'password123'
