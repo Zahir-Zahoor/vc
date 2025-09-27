@@ -198,6 +198,7 @@ def on_send_message(data):
     user_id = data['user_id']
     message = data['message']
     timestamp = data['timestamp']
+    reply_to = data.get('reply_to')  # Optional reply data
     
     print(f'📨 Received message from {user_id} for room {room_id}')
     
@@ -207,7 +208,8 @@ def on_send_message(data):
             'room_id': room_id,
             'user_id': user_id,
             'message': message,
-            'timestamp': timestamp
+            'timestamp': timestamp,
+            'reply_to': reply_to
         })
         
         if response.status_code == 200:
@@ -219,7 +221,8 @@ def on_send_message(data):
                 'user_id': user_id,
                 'message': message,
                 'timestamp': timestamp,
-                'delivery_status': 'delivered'
+                'delivery_status': 'delivered',
+                'reply_to': reply_to
             }, room=room_id)
             
             print(f'📤 Message delivered to room {room_id}')

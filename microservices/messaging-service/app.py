@@ -74,8 +74,8 @@ def process_kafka_messages():
                     
                     # Insert message
                     cur.execute(
-                        "INSERT INTO messages (room_id, user_id, message, timestamp, delivery_status) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                        (room_id, user_id, message_text, timestamp, 'delivered')
+                        "INSERT INTO messages (room_id, user_id, message, timestamp, delivery_status, reply_to) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                        (room_id, user_id, message_text, timestamp, 'delivered', json.dumps(msg_data.get('reply_to')) if msg_data.get('reply_to') else None)
                     )
                     message_id = cur.fetchone()[0]
                     
@@ -258,6 +258,7 @@ def send_message():
         user_id = data['user_id']
         message = data['message']
         timestamp = data['timestamp']
+        reply_to = data.get('reply_to')  # Optional reply data
         
         print(f"Sending message to Kafka: {user_id} -> {room_id}")
         
@@ -267,8 +268,8 @@ def send_message():
             conn = get_db_connection()
             cur = conn.cursor()
             cur.execute(
-                "INSERT INTO messages (room_id, user_id, message, timestamp, delivery_status) VALUES (%s, %s, %s, %s, %s)",
-                (room_id, user_id, message, timestamp, 'delivered')
+                "INSERT INTO messages (room_id, user_id, message, timestamp, delivery_status, reply_to) VALUES (%s, %s, %s, %s, %s, %s)",
+                (room_id, user_id, message, timestamp, 'delivered', json.dumps(reply_to) if reply_to else None)
             )
             conn.commit()
             cur.close()
@@ -280,7 +281,8 @@ def send_message():
             'room_id': room_id,
             'user_id': user_id,
             'message': message,
-            'timestamp': timestamp
+            'timestamp': timestamp,
+            'reply_to': reply_to
         })
         
         return jsonify({'status': 'queued', 'timestamp': timestamp})
@@ -413,12 +415,12 @@ def get_messages(room_id):
             # Convert deletion timestamp from seconds to milliseconds for comparison
             deleted_timestamp_ms = int(deleted_timestamp * 1000)
             cur.execute(
-                "SELECT user_id, message, timestamp, delivery_status FROM messages WHERE room_id = %s AND timestamp > %s ORDER BY timestamp ASC",
+                "SELECT user_id, message, timestamp, delivery_status, reply_to FROM messages WHERE room_id = %s AND timestamp > %s ORDER BY timestamp ASC",
                 (room_id, deleted_timestamp_ms)
             )
         else:
             cur.execute(
-                "SELECT user_id, message, timestamp, delivery_status FROM messages WHERE room_id = %s ORDER BY timestamp ASC",
+                "SELECT user_id, message, timestamp, delivery_status, reply_to FROM messages WHERE room_id = %s ORDER BY timestamp ASC",
                 (room_id,)
             )
         
@@ -428,7 +430,8 @@ def get_messages(room_id):
                 'user_id': row[0],
                 'message': row[1],
                 'timestamp': row[2],
-                'delivery_status': row[3]
+                'delivery_status': row[3],
+                'reply_to': row[4] if row[4] else None  # PostgreSQL JSONB returns dict directly
             })
         
         cur.close()
