@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS group_join_requests (
     UNIQUE(group_id, user_id)
 );
 
--- Messages table with delivery status
+-- Messages table with delivery status and reply support
 CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY,
     room_id VARCHAR(255) NOT NULL,
@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS messages (
     timestamp BIGINT NOT NULL,
     delivery_status VARCHAR(20) DEFAULT 'sent',
     message_type VARCHAR(20) DEFAULT 'text', -- text, image, file, system
+    reply_to JSONB DEFAULT NULL, -- stores reply metadata: {sender, message, timestamp}
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -128,6 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_invites_status ON invites(status);
 CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
 CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages USING GIN (reply_to);
 CREATE INDEX IF NOT EXISTS idx_group_members_group_id ON group_members(group_id);
 CREATE INDEX IF NOT EXISTS idx_group_members_user_id ON group_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_unread_messages_user_room ON unread_messages(user_id, room_id);
@@ -166,3 +168,12 @@ INSERT INTO group_members (group_id, user_id, role, permissions) VALUES
     (2, 'bob', 'owner', '{"can_invite": true, "can_remove": true, "can_edit_group": true}'),
     (2, 'alice', 'member', '{"can_invite": false, "can_remove": false, "can_edit_group": false}')
 ON CONFLICT (group_id, user_id) DO NOTHING;
+
+-- Sample messages with reply examples
+INSERT INTO messages (room_id, user_id, message, timestamp, delivery_status, reply_to) VALUES 
+    ('1', 'alice', 'Hello everyone! Welcome to the group.', 1727462400000, 'delivered', NULL),
+    ('1', 'bob', 'Thanks Alice! Great to be here.', 1727462460000, 'delivered', '{"sender": "alice", "message": "Hello everyone! Welcome to the group.", "timestamp": 1727462400000}'),
+    ('1', 'charlie', 'Looking forward to collaborating!', 1727462520000, 'delivered', NULL),
+    ('dm_alice_bob', 'alice', 'Hey Bob, how are you?', 1727462580000, 'delivered', NULL),
+    ('dm_alice_bob', 'bob', 'I am doing great, thanks for asking!', 1727462640000, 'delivered', '{"sender": "alice", "message": "Hey Bob, how are you?", "timestamp": 1727462580000}')
+ON CONFLICT DO NOTHING;
